@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perilla Circular</title>
+    <style>
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 300px 1fr;
+            gap: 40px;
+            align-items: center;
+            max-width: 1000px;
+            width: 100%;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .inputs-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .input-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 200px;
+        }
+
+        .consumption-input {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            text-align: center;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .consumption-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 5px;
+            min-height: 15px;
+        }
+
+        .knob-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .outputs-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-evenly;
+            height: 400px;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .knob-container {
+            position: relative;
+            width: 250px;
+            height: 250px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .circular-knob {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #e0e0e0, #c0c0c0, #a0a0a0);
+            box-shadow: 
+                0 8px 16px rgba(0, 0, 0, 0.3),
+                inset 0 2px 4px rgba(255, 255, 255, 0.8),
+                inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+
+        .circular-knob:active {
+            transform: scale(0.98);
+        }
+
+        .knob-inner {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            bottom: 15px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #f5f5f5, #d5d5d5, #b5b5b5);
+            box-shadow: 
+                inset 0 3px 6px rgba(0, 0, 0, 0.2),
+                inset 0 -1px 2px rgba(255, 255, 255, 0.5);
+        }
+
+        .knob-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 60px;
+            height: 60px;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 40%, #ffffff, #e8e8e8, #d0d0d0);
+            box-shadow: 
+                0 2px 6px rgba(0, 0, 0, 0.3),
+                inset 0 1px 2px rgba(255, 255, 255, 0.9);
+        }
+
+        .knob-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 70px;
+            background: linear-gradient(to bottom, #666, #333, #666);
+            transform-origin: center bottom;
+            transform: translate(-50%, -100%) rotate(var(--rotation, 0deg));
+            border-radius: 2px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        }
+
+        .knob-indicator::after {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -1px;
+            width: 6px;
+            height: 6px;
+            background: #333;
+            border-radius: 50%;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .scale-marks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        .scale-mark {
+            position: absolute;
+            width: 2px;
+            height: 10px;
+            background: #666;
+            transform-origin: center bottom;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .scale-mark.major {
+            width: 3px;
+            height: 15px;
+            background: #333;
+        }
+
+        .scale-label {
+            position: absolute;
+            font-size: 11px;
+            font-weight: bold;
+            color: #333;
+            width: 30px;
+            text-align: center;
+            top: 50%;
+            left: 50%;
+            transform-origin: center center;
+            transition: transform 0.1s ease;
+        }
+        
+        .scale-label-text {
+            display: inline-block;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .input-label, .output-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 3px;
+            text-align: center;
+        }
+
+        .estimated-cost {
+            background: #666;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            width: 156px;
+            text-align: center;
+        }
+
+        .cost-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .inputs-section, .outputs-section {
+                order: 3;
+            }
+
+            .knob-section {
+                order: 2;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="inputs-section">
+            <div class="input-container">
+                <label for="monthly-consumption" class="input-label">Consumo Mensual (kWh/mes)</label>
+                <input type="number" id="monthly-consumption" class="consumption-input" min="150" max="15000" value="1500">
+                <div id="error-message" class="error-message"></div>
+            </div>
+        </div>
+        
+        <div class="knob-section">
+            <div class="knob-container">
+                <div class="circular-knob">
+                    <div class="scale-marks"></div>
+                    <div class="knob-inner"></div>
+                    <div class="knob-center"></div>
+                    <div class="knob-indicator"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="outputs-section">
+            <div class="cost-label">Valor Estimado de la Solución Solar</div>
+            <div class="estimated-cost" id="estimated-cost">$1,500,000 COP</div>
+            <div class="cost-label">Número Aproximado de Paneles</div>
+            <div class="estimated-cost" id="number-of-panels">12 paneles</div>
+            <div class="cost-label">Área Estimada Requerida</div>
+            <div class="estimated-cost" id="estimated-area">24 m²</div>
+            <div class="cost-label">Potencia Pico Generada</div>
+            <div class="estimated-cost" id="peak-power">6.0 kWp</div>
+        </div>
+    </div>
+
+    <script>
+        class CircularKnob {
+            constructor(element, min, max, initialValue) {
+                this.element = element;
+                this.indicator = element.querySelector('.knob-indicator');
+                this.scaleMarks = element.querySelector('.scale-marks');
+                this.isDragging = false;
+                this.min = min || 150;
+                this.max = max || 15000;
+                this.value = initialValue || 1500;
+                this.centerX = 100;
+                this.centerY = 100;
+                
+                this.consumptionInput = document.getElementById('monthly-consumption');
+                this.errorMessage = document.getElementById('error-message');
+                
+                this.estimatedCostDisplay = document.getElementById('estimated-cost');
+                this.numberOfPanelsDisplay = document.getElementById('number-of-panels');
+                this.estimatedAreaDisplay = document.getElementById('estimated-area');
+                this.peakPowerDisplay = document.getElementById('peak-power');
+
+                this.init();
+            }
+            
+            init() {
+                this.createScaleMarks();
+                this.updateKnob();
+                this.bindEvents();
+            }
+            
+            createScaleMarks() {
+                this.scaleMarks.innerHTML = '';
+                var existingLabels = this.element.querySelectorAll('.scale-label');
+                existingLabels.forEach(label => label.remove());
+                
+                const range = this.max - this.min;
+                const labelRadius = 110;
+                const customLabels = {
+                    '9k': 220, // 7:20 en punto
+                    '4k': 90   // 3:00 en punto
+                };
+
+                // Create marks
+                const markStep = 200;
+                for (let value = this.min; value <= this.max; value += markStep) {
+                    const percentage = (value - this.min) / range;
+                    const angle = percentage * 360;
+                    
+                    const mark = document.createElement('div');
+                    mark.className = 'scale-mark';
+                    if (value % 1000 === 0) {
+                        mark.classList.add('major');
+                    }
+                    mark.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+                    this.scaleMarks.appendChild(mark);
+                }
+
+                // Create linear-proportional labels
+                const labelValues = [150, 1000, 2000, 3000, 5000, 6000, 7000, 8000, 10000, 11000, 12000, 13000, 14000];
+                labelValues.forEach(value => {
+                    const percentage = (value - this.min) / range;
+                    const angle = percentage * 360;
+                    
+                    let labelText = value.toString();
+                    if (value >= 1000) {
+                        labelText = (value / 1000) + 'k';
+                    }
+
+                    // Skip values that will have a custom label
+                    if (customLabels[labelText]) return;
+                    
+                    const label = this.createLabel(labelText, angle);
+                    this.element.appendChild(label);
+                });
+                
+                // Add custom labels
+                for (const text in customLabels) {
+                    const angle = customLabels[text];
+                    const label = this.createLabel(text, angle);
+                    this.element.appendChild(label);
+                }
+            }
+
+            createLabel(text, angle = 0) {
+                const labelRadius = 110;
+                const label = document.createElement('div');
+                label.className = 'scale-label';
+                const labelText = document.createElement('span');
+                labelText.className = 'scale-label-text';
+                labelText.textContent = text;
+                label.appendChild(labelText);
+                
+                label.style.transform = `translate(-50%, -50%) rotate(${angle}deg) translate(0, ${-labelRadius}px)`;
+                labelText.style.transform = `rotate(${-angle}deg)`;
+                
+                return label;
+            }
+            
+            bindEvents() {
+                this.element.addEventListener('mousedown', this.startDrag.bind(this));
+                document.addEventListener('mousemove', this.drag.bind(this));
+                document.addEventListener('mouseup', this.endDrag.bind(this));
+                
+                this.element.addEventListener('touchstart', this.startDrag.bind(this));
+                document.addEventListener('touchmove', this.drag.bind(this));
+                document.addEventListener('touchend', this.endDrag.bind(this));
+                
+                this.consumptionInput.addEventListener('input', this.updateFromInput.bind(this));
+            }
+            
+            startDrag(e) {
+                e.preventDefault();
+                this.isDragging = true;
+                this.element.style.cursor = 'grabbing';
+                
+                var rect = this.element.getBoundingClientRect();
+                var x = (e.clientX || e.touches[0].clientX) - rect.left - this.centerX;
+                var y = (e.clientY || e.touches[0].clientY) - rect.top - this.centerY;
+                this.updateFromPosition(x, y);
+            }
+            
+            endDrag() {
+                this.isDragging = false;
+                this.element.style.cursor = 'pointer';
+            }
+            
+            drag(e) {
+                if (!this.isDragging) return;
+                e.preventDefault();
+                
+                var rect = this.element.getBoundingClientRect();
+                var x = (e.clientX || e.touches[0].clientX) - rect.left - this.centerX;
+                var y = (e.clientY || e.touches[0].clientY) - rect.top - this.centerY;
+                
+                this.updateFromPosition(x, y);
+            }
+            
+            updateFromPosition(x, y) {
+                let angle = Math.atan2(x, -y) * 180 / Math.PI;
+                if (angle < 0) angle += 360;
+                
+                const percentage = angle / 360;
+                let newValue = this.min + percentage * (this.max - this.min);
+                newValue = Math.max(this.min, Math.min(this.max, newValue));
+                
+                this.value = Math.round(newValue);
+                this.updateKnob();
+            }
+            
+            updateFromInput() {
+                const inputValue = parseFloat(this.consumptionInput.value);
+                if (isNaN(inputValue) || inputValue < this.min || inputValue > this.max) {
+                    this.errorMessage.textContent = `Ingrese un valor entre ${this.min} y ${this.max} kWh/mes.`;
+                } else {
+                    this.errorMessage.textContent = '';
+                    this.value = inputValue;
+                    this.updateKnob(false);
+                }
+            }
+
+            updateKnob(updateInput = true) {
+                const range = this.max - this.min;
+                const percentage = (this.value - this.min) / range;
+                const angle = percentage * 360;
+                
+                this.indicator.style.setProperty('--rotation', angle + 'deg');
+                
+                if (updateInput) {
+                    this.consumptionInput.value = Math.round(this.value);
+                }
+                
+                const HORAS_EFECTIVAS = 3.5;
+                const POTENCIA_PANEL = 605;
+                const AREA_POR_PANEL = 2.5;
+
+                var peakPower = ((this.value / 30) / HORAS_EFECTIVAS);
+                var numberOfPanels = Math.floor((peakPower * 1000) / POTENCIA_PANEL);
+                var estimatedArea = Math.floor(numberOfPanels * AREA_POR_PANEL);
+                
+                var estimatedCost;
+                const INTERCEPTO = 12127227.5;
+                const PENDIENTE = 25341.4494;
+                const MAYOR = 1.0272;
+                const MENOR = 1.296;
+
+                if (this.value <= 3000) {
+                    estimatedCost = (INTERCEPTO + (PENDIENTE * this.value)) * MENOR;
+                } else {
+                    estimatedCost = ((INTERCEPTO + (PENDIENTE * this.value)) * MAYOR) 
+ ;
+                }
+                
+                this.estimatedCostDisplay.textContent = `$${Math.round(estimatedCost).toLocaleString()} COP`;
+                this.numberOfPanelsDisplay.textContent = `${numberOfPanels} paneles`;
+                this.estimatedAreaDisplay.textContent = `${estimatedArea} m²`;
+                this.peakPowerDisplay.textContent = `${peakPower.toFixed(2)} kWp`;
+            }
+            
+            setValue(value) {
+                this.value = Math.max(this.min, Math.min(this.max, value));
+                this.updateKnob();
+            }
+            
+            getValue() {
+                return this.value;
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            var knobElement = document.querySelector('.circular-knob');
+            var knob = new CircularKnob(knobElement, 150, 15000, 1500);
+            
+            console.log('Perilla inicializada con valor:', knob.getValue());
+        });
+    </script>
+</body>
+</html>
