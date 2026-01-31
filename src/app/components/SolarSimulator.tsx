@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Zap, Grid3x3, Maximize, TrendingUp, X, ZoomIn, ChevronUp, ChevronDown, Info, Lock } from 'lucide-react';
-import consumoImage from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
-import icono1 from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
-import icono2 from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
-import icono3 from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
-import emailIcon from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
-import whatsappIcon from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
+import consumptionImageIcon from '../assets/consumption_image_icon.png';
+import estimatedInvestmentIcon from '../assets/estimated_investment_icon.svg';
+import monthlySavingsIcon from '../assets/monthly_savings_icon.svg';
+import solarPanelsIcon from '../assets/solar_panels_icon.svg';
+import emailIcon from '../assets/main_icon.svg';
+import whatsappIcon from '../assets/whatsapp_icon.svg';
 
 export function SolarSimulator() {
   const [consumption, setConsumption] = useState(150);
@@ -728,7 +728,7 @@ export function SolarSimulator() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {/* Investment Card */}
           <div 
-            ref={(el) => cardsRef.current[0] = el}
+            ref={el => { cardsRef.current[0] = el; }}
             className="rounded-xl p-6"
             style={{
               background: 'rgba(30, 30, 30, 0.8)',
@@ -740,7 +740,7 @@ export function SolarSimulator() {
                 className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
-                <img src={icono1} alt="Inversión" className="w-6 h-6" />
+                <img src={estimatedInvestmentIcon} alt="Inversión" className="w-6 h-6" />
               </div>
               <div className="flex-1">
                 <div 
@@ -767,7 +767,7 @@ export function SolarSimulator() {
 
           {/* Savings Card */}
           <div 
-            ref={(el) => cardsRef.current[1] = el}
+            ref={el => { cardsRef.current[1] = el; }}
             className="rounded-xl p-6"
             style={{
               background: 'rgba(30, 30, 30, 0.8)',
@@ -779,7 +779,7 @@ export function SolarSimulator() {
                 className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
-                <img src={icono2} alt="Ahorro" className="w-6 h-6" />
+                <img src={monthlySavingsIcon} alt="Ahorro" className="w-6 h-6" />
               </div>
               <div className="flex-1">
                 <div 
@@ -806,7 +806,7 @@ export function SolarSimulator() {
 
           {/* System Card */}
           <div 
-            ref={(el) => cardsRef.current[2] = el}
+            ref={el => { cardsRef.current[2] = el; }}
             className="rounded-xl p-6"
             style={{
               background: 'rgba(30, 30, 30, 0.8)',
@@ -818,7 +818,7 @@ export function SolarSimulator() {
                 className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
-                <img src={icono3} alt="Paneles" className="w-6 h-6" />
+                <img src={solarPanelsIcon} alt="Paneles" className="w-6 h-6" />
               </div>
               <div className="flex-1">
                 <div 
@@ -963,7 +963,7 @@ export function SolarSimulator() {
               onClick={() => setIsZoomed(!isZoomed)}
             >
               <img 
-                src={consumoImage} 
+                src={consumptionImageIcon} 
                 alt="Consumo en factura"
                 className="w-full h-auto transition-transform duration-300"
                 style={{
@@ -1046,6 +1046,7 @@ export function SolarSimulator() {
               {/* Form */}
               <form onSubmit={(e) => {
                 e.preventDefault();
+                // Se consolidan los datos para el envío
                 console.log('Form submitted:', { ...formData, consumption, results });
                 alert('¡Gracias! Recibirás tu cotización en menos de 24 horas.');
                 setShowQuoteForm(false);
