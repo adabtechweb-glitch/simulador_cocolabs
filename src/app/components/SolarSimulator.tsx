@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Zap, Grid3x3, Maximize, TrendingUp, X, ZoomIn, ChevronUp, ChevronDown, Info, Lock } from 'lucide-react';
-import consumoImage from 'figma:asset/cf1147fec9f66ecfc0508de010f7ed6b8c15e470.png';
-import icono1 from 'figma:asset/c608cf7e8f53da7af441c6963c62a66765edc12a.png';
-import icono2 from 'figma:asset/12889ed790afa06415cf284bce4f1ee7887fdd74.png';
-import icono3 from 'figma:asset/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
-import emailIcon from 'figma:asset/2c4bef6bf5a8c8e6aa8341a31e7b9bb61c0e8dcb.png';
-import whatsappIcon from 'figma:asset/b35bd0e71cf0be79c3b6e73e99e6bb21dc8dfe25.png';
+import consumoImage from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
+import icono1 from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
+import icono2 from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
+import icono3 from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
+import emailIcon from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
+import whatsappIcon from '../assets/88da93ae54bd930670ffafb5fdbabc0ac277e928.png';
 
 export function SolarSimulator() {
   const [consumption, setConsumption] = useState(150);
