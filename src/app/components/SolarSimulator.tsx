@@ -6,6 +6,7 @@ import monthlySavingsIcon from '../assets/monthly_savings_icon.svg';
 import solarPanelsIcon from '../assets/solar_panels_icon.svg';
 import emailIcon from '../assets/main_icon.svg';
 import whatsappIcon from '../assets/whatsapp_icon.svg';
+import { useNavigate } from 'react-router-dom';
 
 export function SolarSimulator() {
   const [consumption, setConsumption] = useState(150);
@@ -26,6 +27,7 @@ export function SolarSimulator() {
   const infoButtonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const navigate = useNavigate();
 
   // ============================================
   // CÁLCULOS EXACTOS - ADABTECH
@@ -165,6 +167,69 @@ export function SolarSimulator() {
     setConsumption(newValue);
     setInputValue(newValue.toString());
   };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const payload = {
+      clientData: formData,
+      simulationResults: {
+        monthlyConsumption: consumption,
+        estimatedInvestment: results.precio,
+        panelsCount: results.paneles,
+        requiredArea: results.area,
+        peakPower: results.potenciaPico,
+        monthlySavings: results.ahorro
+      }
+    };
+
+    try {
+      /* const baseUrl = window.location.origin; */
+      const baseUrl = "http://adabtech.local:8080";
+      const response = await fetch(`${baseUrl}/submit-to-google.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      // 1. Convertimos la respuesta a JSON para leer el mensaje de error del PHP
+      const result = await response.json();
+
+      if (response.ok) {
+        // Código 200: Todo salió perfecto
+        alert("¡Solicitud enviada con éxito!");
+        setShowQuoteForm(false);
+      } else {
+        // Códigos 400, 500, 502, etc.
+        // Aquí el servidor respondió, pero algo salió mal en el relay
+        console.error("Error en el servidor:", result);
+        alert(`Error del servidor: ${result.status || 'No se pudo procesar la solicitud'}`);
+      }
+
+    } catch (error) {
+      // Error de red (No hay internet, el servidor está apagado, etc.)
+      console.error("Error de conexión:", error);
+      alert("No se pudo conectar con el servidor. Revisa tu conexión.");
+    }
+  };
+
+  /**
+   * @deprecated Redirección temporal a Google Form para cotización.
+   *
+   * Esta función está activa como bypass en el ambiente de producción.
+  */
+  const handleGoToForm = () => {
+    if (window.top) { // <-- chequeo de seguridad
+      const baseUrl = window.top.location.origin;
+      const formPath = '/cotizador';
+      
+      window.top.location.href = `${baseUrl}${formPath}`;
+    } else {
+      console.error('No se pudo acceder a window.top');
+    }
+  };
+
+
 
   // Sincronizar input con consumption
   useEffect(() => {
@@ -849,7 +914,8 @@ export function SolarSimulator() {
           <div className="relative inline-block">
             <button
               ref={ctaButtonRef}
-              onClick={() => setShowQuoteForm(true)}
+              /* onClick={() => setShowQuoteForm(true)} */
+              onClick={handleGoToForm}
               onMouseEnter={() => setShowTooltip('ctaButton')}
               onMouseLeave={() => setShowTooltip(null)}
               className="relative inline-flex items-center justify-center px-10 py-4 rounded-xl font-bold text-lg overflow-hidden"
@@ -1179,6 +1245,7 @@ export function SolarSimulator() {
                 {/* Submit Button */}
                 <button
                   type="submit"
+                  onClick={handleSubmit}
                   className="w-full py-3.5 rounded-lg font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
                   style={{
                     background: '#F49A2B',
