@@ -18,8 +18,9 @@ export function SolarSimulator() {
   const [formData, setFormData] = useState({
     name: '',
     contact: '',
-    contactType: 'email' as 'email' | 'whatsapp'
+    contactType: 'email' as 'email' | 'whatsapp',
   });
+
   const sliderRef = useRef<HTMLInputElement>(null);
   const consumptionDisplayRef = useRef<HTMLDivElement>(null);
   const sliderContainerRef = useRef<HTMLDivElement>(null);
@@ -27,85 +28,52 @@ export function SolarSimulator() {
   const infoButtonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
-  const navigate = useNavigate();
 
   // ============================================
-  // CÁLCULOS EXACTOS - ADABTECH
-  // INTERPOLACIÓN LINEAL ENTRE VALORES ANCLA
+  // CÁLCULOS DE NEGOCIO — MODELO UNIFICADO
+  // MISMO MODELO QUE EL PRIMER COMPONENTE
   // ============================================
-  
-  // Valores ancla fijos (NO MODIFICAR)
-  const ANCHOR_MIN = {
-    consumo: 150,
-    precioCOP: 20643265,
-    paneles: 2,
-    areaM2: 5,
-    potenciaKwp: 1.43
-  };
-  
-  const ANCHOR_MAX = {
-    consumo: 15000,
-    precioCOP: 402918140,
-    paneles: 236,
-    areaM2: 590,
-    potenciaKwp: 1142.86
-  };
-  
-  /**
-   * Interpolación lineal entre dos puntos
-   * Fórmula: minValue + ((consumoMensual - 150) / (15000 - 150)) * (maxValue - minValue)
-   */
-  const interpolate = (consumoMensual: number, minValue: number, maxValue: number): number => {
-    const rangeConsumo = ANCHOR_MAX.consumo - ANCHOR_MIN.consumo;
-    const rangeValue = maxValue - minValue;
-    const offset = consumoMensual - ANCHOR_MIN.consumo;
-    
-    return minValue + (offset / rangeConsumo) * rangeValue;
-  };
-  
-  /**
-   * Calcula todos los parámetros del sistema solar usando interpolación lineal
-   * NO usa fórmulas de ingeniería solar
-   */
+
+  // Constantes físicas
+  const HORAS_EFECTIVAS = 3.5;
+  const POTENCIA_PANEL_W = 620;
+  const AREA_POR_PANEL_M2 = 3.3;
+
+  // Modelo comercial
+  const INTERCEPTO = 12127227.5;
+  const PENDIENTE = 25341.4494;
+  const TARIFA_ENERGIA = 900;
+  const FACTOR_MENOR = 1.3248;  // <= 3000 kWh
+  const FACTOR_MAYOR = 1.0848; // > 3000 kWh
+
   const calculateResults = (consumoMensual: number) => {
-    // Precio COP - interpolación lineal
-    const precioCOP = interpolate(
-      consumoMensual,
-      ANCHOR_MIN.precioCOP,
-      ANCHOR_MAX.precioCOP
+    // Potencia pico requerida (kWp)
+    const potenciaPico = (consumoMensual / 30) / HORAS_EFECTIVAS;
+
+    // Paneles necesarios
+    const paneles = Math.floor(
+      (potenciaPico * 1000) / POTENCIA_PANEL_W
     );
-    
-    // Número de paneles - interpolación lineal, redondeado a entero
-    const paneles = interpolate(
-      consumoMensual,
-      ANCHOR_MIN.paneles,
-      ANCHOR_MAX.paneles
-    );
-    
-    // Área en m² - interpolación lineal, redondeado a entero
-    const areaM2 = interpolate(
-      consumoMensual,
-      ANCHOR_MIN.areaM2,
-      ANCHOR_MAX.areaM2
-    );
-    
-    // Potencia en kWp - interpolación lineal, 2 decimales
-    const potenciaKwp = interpolate(
-      consumoMensual,
-      ANCHOR_MIN.potenciaKwp,
-      ANCHOR_MAX.potenciaKwp
-    );
-    
-    // Ahorro mensual estimado (basado en consumo)
-    // Asumiendo precio promedio de $650 COP por kWh
-    const ahorroMensual = consumoMensual * 650;
-    
+
+    // Área requerida
+    const area = Math.floor(paneles * AREA_POR_PANEL_M2);
+
+    // Precio estimado
+    const precioBase = INTERCEPTO + (PENDIENTE * consumoMensual);
+    const precio =
+      consumoMensual <= 3000
+        ? precioBase * FACTOR_MENOR
+        : precioBase * FACTOR_MAYOR;
+
+    // Ahorro mensual estimado
+    const ahorroMensual = consumoMensual * TARIFA_ENERGIA;
+
     return {
-      precio: Math.round(precioCOP),
-      paneles: Math.round(paneles),
-      area: Math.round(areaM2),
-      potenciaPico: parseFloat(potenciaKwp.toFixed(2)),
-      ahorro: Math.round(ahorroMensual)
+      precio: Math.round(precio),
+      paneles,
+      area,
+      potenciaPico: parseFloat(potenciaPico.toFixed(2)),
+      ahorro: Math.round(ahorroMensual),
     };
   };
 
@@ -133,11 +101,11 @@ export function SolarSimulator() {
     return 'Comercial/Industrial - Consumo alto';
   };
 
-  // Handlers para input manual
+  // Handlers input manual
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
-    
+
     const numValue = parseInt(value);
     if (!isNaN(numValue)) {
       const clampedValue = Math.max(150, Math.min(15000, numValue));
@@ -179,273 +147,85 @@ export function SolarSimulator() {
         panelsCount: results.paneles,
         requiredArea: results.area,
         peakPower: results.potenciaPico,
-        monthlySavings: results.ahorro
-      }
+        monthlySavings: results.ahorro,
+      },
     };
 
     try {
+      const baseUrl = 'http://adabtech.local:8080';
       /* const baseUrl = window.location.origin; */
-      const baseUrl = "http://adabtech.local:8080";
       const response = await fetch(`${baseUrl}/submit-to-google.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      // 1. Convertimos la respuesta a JSON para leer el mensaje de error del PHP
       const result = await response.json();
 
       if (response.ok) {
-        // Código 200: Todo salió perfecto
-        alert("¡Solicitud enviada con éxito!");
+        alert('¡Solicitud enviada con éxito!');
         setShowQuoteForm(false);
       } else {
-        // Códigos 400, 500, 502, etc.
-        // Aquí el servidor respondió, pero algo salió mal en el relay
-        console.error("Error en el servidor:", result);
+        console.error('Error en el servidor:', result);
         alert(`Error del servidor: ${result.status || 'No se pudo procesar la solicitud'}`);
       }
-
     } catch (error) {
-      // Error de red (No hay internet, el servidor está apagado, etc.)
-      console.error("Error de conexión:", error);
-      alert("No se pudo conectar con el servidor. Revisa tu conexión.");
+      console.error('Error de conexión:', error);
+      alert('No se pudo conectar con el servidor. Revisa tu conexión.');
     }
   };
 
-  /**
-   * @deprecated Redirección temporal a Google Form para cotización.
-   *
-   * Esta función está activa como bypass en el ambiente de producción.
-  */
+  // Redirección temporal
   const handleGoToForm = () => {
-    if (window.top) { // <-- chequeo de seguridad
+    if (window.top) {
       const baseUrl = window.top.location.origin;
-      const formPath = '/cotizador';
-      
-      window.top.location.href = `${baseUrl}${formPath}`;
-    } else {
-      console.error('No se pudo acceder a window.top');
+      window.top.location.href = `${baseUrl}/cotizador`;
     }
-  };
+  };4
 
-
-
-  // Sincronizar input con consumption
+  // Sync input ↔ consumo
   useEffect(() => {
     setInputValue(consumption.toString());
   }, [consumption]);
 
-  // Microinteractions
+  // Microinteracciones
   useEffect(() => {
     const slider = sliderRef.current;
     const sliderContainer = sliderContainerRef.current;
     const consumptionDisplay = consumptionDisplayRef.current;
     const ctaButton = ctaButtonRef.current;
     const infoButton = infoButtonRef.current;
-    const cards = cardsRef.current.filter(Boolean) as HTMLDivElement[];
 
     if (!slider || !sliderContainer || !consumptionDisplay || !ctaButton) return;
 
     let isDragging = false;
     let glowElement: HTMLDivElement | null = null;
 
-    // Slider glow element
     glowElement = document.createElement('div');
     glowElement.style.position = 'absolute';
     glowElement.style.inset = '-4px';
     glowElement.style.borderRadius = '9999px';
     glowElement.style.opacity = '0';
     glowElement.style.pointerEvents = 'none';
-    glowElement.style.background = 'linear-gradient(90deg, transparent 0%, rgba(244, 154, 43, 0.4) 50%, transparent 100%)';
+    glowElement.style.background =
+      'linear-gradient(90deg, transparent 0%, rgba(244, 154, 43, 0.4) 50%, transparent 100%)';
     glowElement.style.filter = 'blur(12px)';
     glowElement.style.transition = 'opacity 200ms ease-out';
     sliderContainer.appendChild(glowElement);
 
-    // Slider interactions
-    const handleFocus = () => {
-      if (glowElement) glowElement.style.opacity = '0.5';
-    };
-
-    const handleBlur = () => {
-      if (!isDragging && glowElement) glowElement.style.opacity = '0';
-    };
-
-    const handleMouseDown = () => {
-      isDragging = true;
-      if (glowElement) {
-        glowElement.style.transition = 'opacity 200ms ease-out';
-        glowElement.style.opacity = '0.8';
-      }
-    };
-
-    const handleInput = () => {
-      if (isDragging && consumptionDisplay) {
-        consumptionDisplay.style.transition = 'transform 100ms ease-out';
-        consumptionDisplay.style.transform = 'scale(1.02)';
-        setTimeout(() => {
-          consumptionDisplay.style.transform = 'scale(1)';
-        }, 100);
-      }
-    };
-
     const handleMouseUp = () => {
       isDragging = false;
-      if (glowElement) {
-        glowElement.style.transition = 'opacity 300ms ease-out';
-        glowElement.style.opacity = '0';
-      }
+      if (glowElement) glowElement.style.opacity = '0';
     };
 
-    const handleMouseEnter = () => {
-      if (!isDragging && glowElement) glowElement.style.opacity = '0.3';
-    };
-
-    const handleMouseLeave = () => {
-      if (!isDragging && glowElement) glowElement.style.opacity = '0';
-    };
-
-    slider.addEventListener('focus', handleFocus);
-    slider.addEventListener('blur', handleBlur);
-    slider.addEventListener('mousedown', handleMouseDown);
-    slider.addEventListener('input', handleInput);
+    slider.addEventListener('mousedown', () => (isDragging = true));
     slider.addEventListener('mouseup', handleMouseUp);
-    slider.addEventListener('mouseenter', handleMouseEnter);
-    slider.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('mouseup', handleMouseUp);
 
-    // CTA button effects
-    let buttonGlowContainer: HTMLDivElement | null = null;
-
-    buttonGlowContainer = document.createElement('div');
-    buttonGlowContainer.style.position = 'absolute';
-    buttonGlowContainer.style.inset = '0';
-    buttonGlowContainer.style.borderRadius = 'inherit';
-    buttonGlowContainer.style.overflow = 'hidden';
-    buttonGlowContainer.style.pointerEvents = 'none';
-    buttonGlowContainer.style.zIndex = '0';
-    ctaButton.appendChild(buttonGlowContainer);
-
-    const buttonMouseEnter = () => {
-      const glow = document.createElement('div');
-      glow.style.position = 'absolute';
-      glow.style.width = '0';
-      glow.style.height = '0';
-      glow.style.borderRadius = '50%';
-      glow.style.background = 'radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%)';
-      glow.style.transform = 'translate(-50%, -50%)';
-      glow.style.transition = 'all 400ms ease-out';
-      glow.style.left = '50%';
-      glow.style.top = '50%';
-      
-      if (buttonGlowContainer) buttonGlowContainer.appendChild(glow);
-      
-      requestAnimationFrame(() => {
-        glow.style.width = '200%';
-        glow.style.height = '200%';
-        glow.style.opacity = '0';
-      });
-      
-      setTimeout(() => {
-        if (glow.parentElement) glow.remove();
-      }, 400);
-
-      ctaButton.style.boxShadow = '0 0 30px rgba(244, 154, 43, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4)';
-    };
-
-    const buttonMouseLeave = () => {
-      ctaButton.style.boxShadow = '';
-    };
-
-    const buttonMouseDown = () => {
-      ctaButton.style.transition = 'transform 200ms ease-out';
-      ctaButton.style.transform = 'scale(0.98)';
-    };
-
-    const buttonMouseUp = () => {
-      ctaButton.style.transform = '';
-    };
-
-    ctaButton.addEventListener('mouseenter', buttonMouseEnter);
-    ctaButton.addEventListener('mouseleave', buttonMouseLeave);
-    ctaButton.addEventListener('mousedown', buttonMouseDown);
-    ctaButton.addEventListener('mouseup', buttonMouseUp);
-
-    // Info button effects (same as CTA button)
-    let infoButtonGlowContainer: HTMLDivElement | null = null;
-
-    if (infoButton) {
-      infoButtonGlowContainer = document.createElement('div');
-      infoButtonGlowContainer.style.position = 'absolute';
-      infoButtonGlowContainer.style.inset = '0';
-      infoButtonGlowContainer.style.borderRadius = 'inherit';
-      infoButtonGlowContainer.style.overflow = 'hidden';
-      infoButtonGlowContainer.style.pointerEvents = 'none';
-      infoButtonGlowContainer.style.zIndex = '0';
-      infoButton.appendChild(infoButtonGlowContainer);
-
-      const infoButtonMouseEnter = () => {
-        const glow = document.createElement('div');
-        glow.style.position = 'absolute';
-        glow.style.width = '0';
-        glow.style.height = '0';
-        glow.style.borderRadius = '50%';
-        glow.style.background = 'radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%)';
-        glow.style.transform = 'translate(-50%, -50%)';
-        glow.style.transition = 'all 400ms ease-out';
-        glow.style.left = '50%';
-        glow.style.top = '50%';
-        
-        if (infoButtonGlowContainer) infoButtonGlowContainer.appendChild(glow);
-        
-        requestAnimationFrame(() => {
-          glow.style.width = '200%';
-          glow.style.height = '200%';
-          glow.style.opacity = '0';
-        });
-        
-        setTimeout(() => {
-          if (glow.parentElement) glow.remove();
-        }, 400);
-
-        infoButton.style.boxShadow = '0 0 30px rgba(244, 154, 43, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4)';
-      };
-
-      const infoButtonMouseLeave = () => {
-        infoButton.style.boxShadow = '';
-      };
-
-      const infoButtonMouseDown = () => {
-        infoButton.style.transition = 'transform 200ms ease-out';
-        infoButton.style.transform = 'scale(0.98)';
-      };
-
-      const infoButtonMouseUp = () => {
-        infoButton.style.transform = '';
-      };
-
-      infoButton.addEventListener('mouseenter', infoButtonMouseEnter);
-      infoButton.addEventListener('mouseleave', infoButtonMouseLeave);
-      infoButton.addEventListener('mousedown', infoButtonMouseDown);
-      infoButton.addEventListener('mouseup', infoButtonMouseUp);
-    }
-
     return () => {
-      slider.removeEventListener('focus', handleFocus);
-      slider.removeEventListener('blur', handleBlur);
-      slider.removeEventListener('mousedown', handleMouseDown);
-      slider.removeEventListener('input', handleInput);
       slider.removeEventListener('mouseup', handleMouseUp);
-      slider.removeEventListener('mouseenter', handleMouseEnter);
-      slider.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('mouseup', handleMouseUp);
-      ctaButton.removeEventListener('mouseenter', buttonMouseEnter);
-      ctaButton.removeEventListener('mouseleave', buttonMouseLeave);
-      ctaButton.removeEventListener('mousedown', buttonMouseDown);
-      ctaButton.removeEventListener('mouseup', buttonMouseUp);
-      if (glowElement && glowElement.parentElement) glowElement.remove();
-      if (buttonGlowContainer && buttonGlowContainer.parentElement) buttonGlowContainer.remove();
-      if (infoButtonGlowContainer && infoButtonGlowContainer.parentElement) infoButtonGlowContainer.remove();
+      if (glowElement?.parentElement) glowElement.remove();
     };
   }, []);
 
@@ -914,8 +694,8 @@ export function SolarSimulator() {
           <div className="relative inline-block">
             <button
               ref={ctaButtonRef}
-              /* onClick={() => setShowQuoteForm(true)} */
-              onClick={handleGoToForm}
+              onClick={() => setShowQuoteForm(true)}
+              /* onClick={handleGoToForm} */
               onMouseEnter={() => setShowTooltip('ctaButton')}
               onMouseLeave={() => setShowTooltip(null)}
               className="relative inline-flex items-center justify-center px-10 py-4 rounded-xl font-bold text-lg overflow-hidden"
