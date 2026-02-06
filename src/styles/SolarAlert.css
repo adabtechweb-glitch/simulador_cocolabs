@@ -1,0 +1,39 @@
+/* figma/src/styles/SolarAlert.css */
+.solar-popup {
+  background-color: #1c1c1c !important;
+  border: 1px solid rgba(245, 166, 63, 0.2) !important;
+  border-radius: 15px !important;
+}
+
+.solar-title {
+  color: #ffffff !important;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600 !important;
+  margin-top: 10px !important;
+}
+
+.solar-content {
+  color: #b0b0b0 !important;
+  font-size: 1.1rem !important;
+}
+
+.solar-confirm-btn {
+  background-color: #f5a63f !important;
+  color: #000000 !important;
+  padding: 12px 35px !important;
+  border-radius: 8px !important;
+  font-weight: bold !important;
+  border: none !important;
+  cursor: pointer;
+  margin-top: 15px !important;
+}
+
+/* ELIMINA EL BORDE BLANCO/AZUL */
+.solar-confirm-btn:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.solar-confirm-btn:hover {
+  background-color: #e09532 !important;
+}

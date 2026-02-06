@@ -6,7 +6,8 @@ import monthlySavingsIcon from '../assets/monthly_savings_icon.svg';
 import solarPanelsIcon from '../assets/solar_panels_icon.svg';
 import emailIcon from '../assets/main_icon.svg';
 import whatsappIcon from '../assets/whatsapp_icon.svg';
-import { useNavigate } from 'react-router-dom';
+import Swal, { SweetAlertIcon } from 'sweetalert2';
+import { showSolarAlert } from './alert-custom';
 
 export function SolarSimulator() {
   const [consumption, setConsumption] = useState(150);
@@ -152,36 +153,34 @@ export function SolarSimulator() {
     };
 
     try {
-      const baseUrl = 'http://adabtech.local:8080';
       /* const baseUrl = window.location.origin; */
-      const response = await fetch(`${baseUrl}/submit-to-google.php`, {
+      const baseURL = window.location.origin;
+      const response = await fetch(`${baseURL}/submit-to-google.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      /* const result = await response.json(); */
 
-      if (response.ok) {
-        alert('¡Solicitud enviada con éxito!');
-        setShowQuoteForm(false);
+      // Independientemente del resultado, cerramos el formulario y mostramos una alerta genérica
+      setShowQuoteForm(false);
+
+      // Segun la respuesta podemos mostrar un mensaje de éxito o error, pero siempre con la misma alerta personalizada
+      if (response.ok) {  
+        showSolarAlert(
+          'success', 
+          '¡Solicitud enviada con éxito!', 
+          'Si no ves el email, por favor revisa tu carpeta de Spam o Promociones.'
+        );
       } else {
-        console.error('Error en el servidor:', result);
-        alert(`Error del servidor: ${result.status || 'No se pudo procesar la solicitud'}`);
+        showSolarAlert('error', '¡Ups!', 'No pudimos procesar tu solicitud. Intenta nuevamente más tarde.');
       }
     } catch (error) {
-      console.error('Error de conexión:', error);
-      alert('No se pudo conectar con el servidor. Revisa tu conexión.');
+      setShowQuoteForm(false);
+      showSolarAlert('error', '¡Ups!', 'No pudimos procesar tu solicitud. Intenta nuevamente más tarde.');
     }
   };
-
-  // Redirección temporal
-  const handleGoToForm = () => {
-    if (window.top) {
-      const baseUrl = window.top.location.origin;
-      window.top.location.href = `${baseUrl}/cotizador`;
-    }
-  };4
 
   // Sync input ↔ consumo
   useEffect(() => {
