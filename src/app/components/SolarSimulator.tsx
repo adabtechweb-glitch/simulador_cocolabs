@@ -120,22 +120,32 @@ export function SolarSimulator() {
     setFormData(prev => ({ ...prev, contactType: method }));
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Extraemos el valor correcto basado en el tipo de contacto seleccionado
+    // para cumplir con la estructura del estado (whatsapp/email)
+    const contactValue = formData.contactType === 'whatsapp' 
+      ? formData.whatsapp 
+      : formData.email;
+
     const payload = {
       clientData: {
         name: formData.name,
+        contact: contactValue, // Se envía como 'contact' para el mapeo del PHP
         contactType: formData.contactType,
-        contactValue: formData.contactType === 'whatsapp' ? formData.whatsapp : formData.email 
+        segmento: consumption <= 3000 ? 'Hogar' : 'Empresa',
+        ciudad: '',        
+        departamento: ''   
       },
       simulationResults: {
         monthlyConsumption: consumption,
         estimatedInvestment: results.precio,
-        panelesCount: results.paneles,
+        panelsCount: results.paneles, 
         requiredArea: results.area,
         peakPower: results.potenciaPico,
-        monthlySavings: results.ahorro,
-      },
+        monthlySavings: results.ahorro
+      }
     };
 
     try {
@@ -145,15 +155,37 @@ export function SolarSimulator() {
         body: JSON.stringify(payload),
       });
 
+      const data = await response.json();
       setShowQuoteForm(false);
-      if (response.ok) {
-        showSolarAlert('success', '¡Solicitud enviada!', 'Revisa tu WhatsApp o Email.');
+
+      if (data.status === 'success') {
+        // Definimos el mensaje dinámico según el método de contacto
+        const successMessage = formData.contactType === 'whatsapp'
+          ? 'Un asesor de AdabTech te escribirá a tu WhatsApp muy pronto.'
+          : 'Hemos enviado la información a tu correo electrónico. ¡Revisa tu bandeja de entrada y/o spam!';
+
+        setShowQuoteForm(false);
+
+        await showSolarAlert(
+          'success',
+          '¡Solicitud enviada!',
+          successMessage
+        );
       } else {
-        throw new Error();
+        setShowQuoteForm(false);
+        await showSolarAlert(
+          'error',
+          'Hubo un problema',
+          'No pudimos procesar tu solicitud en el servidor. Intenta de nuevo.'
+        );
       }
     } catch (error) {
       setShowQuoteForm(false);
-      showSolarAlert('error', 'Error', 'No pudimos procesar tu solicitud.');
+      await showSolarAlert(
+        'error', 
+        'Error de conexión', 
+        'Asegúrate de estar conectado a internet e intenta nuevamente.'
+      );
     }
   };
 
