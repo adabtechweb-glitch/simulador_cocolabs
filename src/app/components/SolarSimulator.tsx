@@ -6,123 +6,81 @@ import monthlySavingsIcon from '../assets/monthly_savings_icon.svg';
 import solarPanelsIcon from '../assets/solar_panels_icon.svg';
 import emailIcon from '../assets/main_icon.svg';
 import whatsappIcon from '../assets/whatsapp_icon.svg';
-import Swal, { SweetAlertIcon } from 'sweetalert2';
 import { showSolarAlert } from './alert-custom';
 
 export function SolarSimulator() {
+  // --- ESTADOS ---
   const [consumption, setConsumption] = useState(150);
+  const [inputValue, setInputValue] = useState('150');
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
-  const [inputValue, setInputValue] = useState('150');
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
-  const [showQuoteForm, setShowQuoteForm] = useState(false);
+
+  // Estado persistente del formulario
   const [formData, setFormData] = useState({
     name: '',
-    contact: '',
-    contactType: 'email' as 'email' | 'whatsapp',
+    contactType: 'whatsapp' as 'whatsapp' | 'email',
+    whatsapp: '', 
+    email: ''     
   });
 
+  // --- REFERENCIAS (REFS) ---
+  // Se agregan todas las que pide tu JSX para evitar errores de "Cannot find name"
   const sliderRef = useRef<HTMLInputElement>(null);
-  const consumptionDisplayRef = useRef<HTMLDivElement>(null);
   const sliderContainerRef = useRef<HTMLDivElement>(null);
+  const consumptionDisplayRef = useRef<HTMLDivElement>(null);
   const ctaButtonRef = useRef<HTMLButtonElement>(null);
   const infoButtonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
 
-  // ============================================
-  // CÁLCULOS DE NEGOCIO — MODELO UNIFICADO
-  // MISMO MODELO QUE EL PRIMER COMPONENTE
-  // ============================================
+  // --- CONSTANTES DE NEGOCIO ---
+  const CONSTANTS = {
+    HORAS_EFECTIVAS: 3.5,
+    POTENCIA_PANEL_W: 620,
+    AREA_POR_PANEL_M2: 3.3,
+    INTERCEPTO: 12127227.5,
+    PENDIENTE: 25341.4494,
+    TARIFA_ENERGIA: 900,
+    FACTOR_RETAIL: 1.3248,
+    FACTOR_INDUSTRIAL: 1.0848
+  };
 
-  // Constantes físicas
-  const HORAS_EFECTIVAS = 3.5;
-  const POTENCIA_PANEL_W = 620;
-  const AREA_POR_PANEL_M2 = 3.3;
-
-  // Modelo comercial
-  const INTERCEPTO = 12127227.5;
-  const PENDIENTE = 25341.4494;
-  const TARIFA_ENERGIA = 900;
-  const FACTOR_MENOR = 1.3248;  // <= 3000 kWh
-  const FACTOR_MAYOR = 1.0848; // > 3000 kWh
-
-  const calculateResults = (consumoMensual: number) => {
-    // Potencia pico requerida (kWp)
-    const potenciaPico = (consumoMensual / 30) / HORAS_EFECTIVAS;
-
-    // Paneles necesarios
-    const paneles = Math.floor(
-      (potenciaPico * 1000) / POTENCIA_PANEL_W
-    );
-
-    // Área requerida
-    const area = Math.floor(paneles * AREA_POR_PANEL_M2);
-
-    // Precio estimado
-    const precioBase = INTERCEPTO + (PENDIENTE * consumoMensual);
-    const precio =
-      consumoMensual <= 3000
-        ? precioBase * FACTOR_MENOR
-        : precioBase * FACTOR_MAYOR;
-
-    // Ahorro mensual estimado
-    const ahorroMensual = consumoMensual * TARIFA_ENERGIA;
+  // --- LÓGICA DE CÁLCULO ---
+  const calculateResults = (consumo: number) => {
+    const potenciaPico = (consumo / 30) / CONSTANTS.HORAS_EFECTIVAS;
+    const paneles = Math.floor((potenciaPico * 1000) / CONSTANTS.POTENCIA_PANEL_W);
+    const area = Math.floor(paneles * CONSTANTS.AREA_POR_PANEL_M2);
+    const precioBase = CONSTANTS.INTERCEPTO + (CONSTANTS.PENDIENTE * consumo);
+    const factor = consumo <= 3000 ? CONSTANTS.FACTOR_RETAIL : CONSTANTS.FACTOR_INDUSTRIAL;
 
     return {
-      precio: Math.round(precio),
+      precio: Math.round(precioBase * factor),
       paneles,
       area,
       potenciaPico: parseFloat(potenciaPico.toFixed(2)),
-      ahorro: Math.round(ahorroMensual),
+      ahorro: Math.round(consumo * CONSTANTS.TARIFA_ENERGIA),
     };
   };
 
   const results = calculateResults(consumption);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const getConsumptionLevel = () => {
-    if (consumption < 1000) return 'bajo';
-    if (consumption < 5000) return 'medio';
-    return 'alto';
-  };
-
-  const getConsumptionLabel = () => {
-    const level = getConsumptionLevel();
-    if (level === 'bajo') return 'Residencial - Consumo bajo';
-    if (level === 'medio') return 'Residencial/Comercial - Consumo medio';
-    return 'Comercial/Industrial - Consumo alto';
-  };
-
-  // Handlers input manual
+  // --- HANDLERS DE CONSUMO (SOLUCIONA ERRORES DE BOTONES +/-) ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
-
     const numValue = parseInt(value);
     if (!isNaN(numValue)) {
-      const clampedValue = Math.max(150, Math.min(15000, numValue));
-      setConsumption(clampedValue);
+      setConsumption(Math.max(150, Math.min(15000, numValue)));
     }
   };
 
   const handleInputBlur = () => {
     const numValue = parseInt(inputValue);
-    if (isNaN(numValue)) {
-      setInputValue(consumption.toString());
-    } else {
-      const clampedValue = Math.max(150, Math.min(15000, numValue));
-      setConsumption(clampedValue);
-      setInputValue(clampedValue.toString());
-    }
+    const finalValue = isNaN(numValue) ? consumption : Math.max(150, Math.min(15000, numValue));
+    setConsumption(finalValue);
+    setInputValue(finalValue.toString());
   };
 
   const handleIncrement = () => {
@@ -137,15 +95,43 @@ export function SolarSimulator() {
     setInputValue(newValue.toString());
   };
 
+  // --- LÓGICA DE ETIQUETAS (SOLUCIONA ERROR getConsumptionLabel) ---
+  const getConsumptionLevel = () => {
+    if (consumption < 1000) return 'bajo';
+    if (consumption < 5000) return 'medio';
+    return 'alto';
+  };
+
+  const getConsumptionLabel = () => {
+    const level = getConsumptionLevel();
+    if (level === 'bajo') return 'Residencial - Consumo bajo';
+    if (level === 'medio') return 'Residencial/Comercial - Consumo medio';
+    return 'Comercial/Industrial - Consumo alto';
+  };
+
+  // --- HANDLERS DEL FORMULARIO ---
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const targetField = name || formData.contactType;
+    setFormData(prev => ({ ...prev, [targetField]: value }));
+  };
+
+  const handleContactMethodChange = (method: 'whatsapp' | 'email') => {
+    setFormData(prev => ({ ...prev, contactType: method }));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
     const payload = {
-      clientData: formData,
+      clientData: {
+        name: formData.name,
+        contactType: formData.contactType,
+        contactValue: formData.contactType === 'whatsapp' ? formData.whatsapp : formData.email 
+      },
       simulationResults: {
         monthlyConsumption: consumption,
         estimatedInvestment: results.precio,
-        panelsCount: results.paneles,
+        panelesCount: results.paneles,
         requiredArea: results.area,
         peakPower: results.potenciaPico,
         monthlySavings: results.ahorro,
@@ -153,84 +139,42 @@ export function SolarSimulator() {
     };
 
     try {
-      /* const baseUrl = window.location.origin; */
-      const baseURL = window.location.origin;
-      const response = await fetch(`${baseURL}/submit-to-google.php`, {
+      const response = await fetch(`${window.location.origin}/submit-to-google.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      /* const result = await response.json(); */
-
-      // Independientemente del resultado, cerramos el formulario y mostramos una alerta genérica
       setShowQuoteForm(false);
-
-      // Segun la respuesta podemos mostrar un mensaje de éxito o error, pero siempre con la misma alerta personalizada
-      if (response.ok) {  
-        showSolarAlert(
-          'success', 
-          '¡Solicitud enviada con éxito!', 
-          'Si no ves el email, por favor revisa tu carpeta de Spam o Promociones.'
-        );
+      if (response.ok) {
+        showSolarAlert('success', '¡Solicitud enviada!', 'Revisa tu WhatsApp o Email.');
       } else {
-        showSolarAlert('error', '¡Ups!', 'No pudimos procesar tu solicitud. Intenta nuevamente más tarde.');
+        throw new Error();
       }
     } catch (error) {
       setShowQuoteForm(false);
-      showSolarAlert('error', '¡Ups!', 'No pudimos procesar tu solicitud. Intenta nuevamente más tarde.');
+      showSolarAlert('error', 'Error', 'No pudimos procesar tu solicitud.');
     }
   };
 
-  // Sync input ↔ consumo
+  // --- EFECTOS ---
   useEffect(() => {
     setInputValue(consumption.toString());
   }, [consumption]);
 
-  // Microinteracciones
   useEffect(() => {
-    const slider = sliderRef.current;
-    const sliderContainer = sliderContainerRef.current;
-    const consumptionDisplay = consumptionDisplayRef.current;
-    const ctaButton = ctaButtonRef.current;
-    const infoButton = infoButtonRef.current;
+    if (showQuoteForm) {
+      window.parent.postMessage({ type: 'SOLAR_SIM_CENTER_MODAL' }, '*');
+    }
+  }, [showQuoteForm]);
 
-    if (!slider || !sliderContainer || !consumptionDisplay || !ctaButton) return;
-
-    let isDragging = false;
-    let glowElement: HTMLDivElement | null = null;
-
-    glowElement = document.createElement('div');
-    glowElement.style.position = 'absolute';
-    glowElement.style.inset = '-4px';
-    glowElement.style.borderRadius = '9999px';
-    glowElement.style.opacity = '0';
-    glowElement.style.pointerEvents = 'none';
-    glowElement.style.background =
-      'linear-gradient(90deg, transparent 0%, rgba(244, 154, 43, 0.4) 50%, transparent 100%)';
-    glowElement.style.filter = 'blur(12px)';
-    glowElement.style.transition = 'opacity 200ms ease-out';
-    sliderContainer.appendChild(glowElement);
-
-    const handleMouseUp = () => {
-      isDragging = false;
-      if (glowElement) glowElement.style.opacity = '0';
-    };
-
-    slider.addEventListener('mousedown', () => (isDragging = true));
-    slider.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      slider.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('mouseup', handleMouseUp);
-      if (glowElement?.parentElement) glowElement.remove();
-    };
-  }, []);
+  // --- HELPERS ---
+  const formatCurrency = (amount: number) => 
+    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
 
   return (
     <section 
-      className="relative w-full min-h-screen flex items-center justify-center px-4 py-16 overflow-hidden"
+      className="relative w-full min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-16 overflow-hidden"
       style={{
         background: '#000000',
         fontFamily: 'Manrope, sans-serif'
@@ -345,60 +289,40 @@ export function SolarSimulator() {
               </div>
             </div>
             
-            <div className="inline-block relative" ref={consumptionDisplayRef}>
+            <div className="relative" ref={consumptionDisplayRef}>
               <div 
-                className="relative rounded-lg sm:rounded-xl px-2 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 border-2 mx-auto"
+                className="relative rounded-lg sm:rounded-xl px-3 sm:px-6 py-3 sm:py-4 border-2 mx-auto"
                 style={{
                   background: 'rgba(50, 40, 30, 0.5)',
                   borderColor: 'rgba(244, 154, 43, 0.3)',
                   boxShadow: '0 0 20px rgba(244, 154, 43, 0.15)',
-                  width: 'fit-content',
-                  maxWidth: '95%'
+                  width: 'max-content',
+                  maxWidth: '100%',
+                  boxSizing: 'border-box'
                 }}
               >
-                <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 lg:gap-4 justify-center">
-                  {/* Decrement Button - Soft Style */}
+                <div className="flex items-center justify-center gap-2 sm:gap-4 flex-nowrap">
+                  {/* Decrement Button */}
                   <div className="relative flex-shrink-0">
                     <button
                       onClick={handleDecrement}
                       onMouseEnter={() => setShowTooltip('decrement')}
                       onMouseLeave={() => setShowTooltip(null)}
-                      className="w-7 h-7 sm:w-9 sm:h-9 md:w-10 md:h-10 lg:w-11 lg:h-11 rounded-md transition-all hover:bg-opacity-30 active:scale-95"
+                      className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-md transition-all hover:bg-opacity-30 active:scale-95 flex items-center justify-center"
                       style={{
                         background: 'rgba(244, 154, 43, 0.12)',
                         border: '1px solid rgba(244, 154, 43, 0.2)',
                         color: '#F49A2B',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
+                        cursor: 'pointer'
                       }}
                       aria-label="Disminuir consumo"
                     >
-                      <ChevronDown className="w-3.5 h-3.5 sm:w-5 sm:h-5 md:w-5 md:h-5 lg:w-6 lg:h-6" strokeWidth={2} />
+                      <ChevronDown className="w-4 h-4 sm:w-6 sm:h-6" strokeWidth={2} />
                     </button>
-                    {showTooltip === 'decrement' && (
-                      <div
-                        className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2.5 py-1.5 rounded-md text-xs whitespace-nowrap z-50"
-                        style={{
-                          background: 'rgba(244, 154, 43, 0.95)',
-                          color: '#000',
-                          fontFamily: 'Montserrat, sans-serif',
-                          fontWeight: 600,
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
-                        }}
-                      >
-                        Disminuir -100 kWh
-                        <div
-                          className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 rotate-45"
-                          style={{ background: 'rgba(244, 154, 43, 0.95)' }}
-                        ></div>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Input Field - Editable */}
-                  <div className="relative">
+                  {/* Input Field + kWh Label Container */}
+                  <div className="flex items-baseline gap-1 sm:gap-2">
                     <input
                       ref={inputRef}
                       type="number"
@@ -407,86 +331,42 @@ export function SolarSimulator() {
                       value={inputValue}
                       onChange={handleInputChange}
                       onBlur={handleInputBlur}
-                      onMouseEnter={() => setShowTooltip('display')}
-                      onMouseLeave={() => setShowTooltip(null)}
-                      className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-center bg-transparent border-none outline-none"
+                      className="text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight text-center bg-transparent border-none outline-none"
                       style={{ 
                         color: '#F49A2B',
-                        width: 'auto',
-                        minWidth: '80px',
-                        maxWidth: '180px',
+                        width: `${inputValue.toString().length + 0.5}ch`,
+                        minWidth: '2ch',
                         WebkitAppearance: 'none',
                         MozAppearance: 'textfield',
                         cursor: 'text'
                       }}
                     />
-                    {showTooltip === 'display' && (
-                      <div
-                        className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2.5 py-1.5 rounded-md text-xs whitespace-nowrap z-50"
-                        style={{
-                          background: 'rgba(244, 154, 43, 0.95)',
-                          color: '#000',
-                          fontFamily: 'Montserrat, sans-serif',
-                          fontWeight: 600,
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
-                        }}
-                      >
-                        Haz clic para editar el valor
-                        <div
-                          className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 rotate-45"
-                          style={{ background: 'rgba(244, 154, 43, 0.95)' }}
-                        ></div>
-                      </div>
-                    )}
+                    <span 
+                      className="text-base sm:text-2xl font-medium"
+                      style={{ color: 'rgba(255, 255, 255, 0.8)', fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      kWh
+                    </span>
                   </div>
 
-                  {/* Increment Button - Soft Style */}
+                  {/* Increment Button */}
                   <div className="relative flex-shrink-0">
                     <button
                       onClick={handleIncrement}
                       onMouseEnter={() => setShowTooltip('increment')}
                       onMouseLeave={() => setShowTooltip(null)}
-                      className="w-7 h-7 sm:w-9 sm:h-9 md:w-10 md:h-10 lg:w-11 lg:h-11 rounded-md transition-all hover:bg-opacity-30 active:scale-95"
+                      className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-md transition-all hover:bg-opacity-30 active:scale-95 flex items-center justify-center"
                       style={{
                         background: 'rgba(244, 154, 43, 0.12)',
                         border: '1px solid rgba(244, 154, 43, 0.2)',
                         color: '#F49A2B',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
+                        cursor: 'pointer'
                       }}
                       aria-label="Aumentar consumo"
                     >
-                      <ChevronUp className="w-3.5 h-3.5 sm:w-5 sm:h-5 md:w-5 md:h-5 lg:w-6 lg:h-6" strokeWidth={2} />
+                      <ChevronUp className="w-4 h-4 sm:w-6 sm:h-6" strokeWidth={2} />
                     </button>
-                    {showTooltip === 'increment' && (
-                      <div
-                        className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2.5 py-1.5 rounded-md text-xs whitespace-nowrap z-50"
-                        style={{
-                          background: 'rgba(244, 154, 43, 0.95)',
-                          color: '#000',
-                          fontFamily: 'Montserrat, sans-serif',
-                          fontWeight: 600,
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
-                        }}
-                      >
-                        Aumentar +100 kWh
-                        <div
-                          className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 rotate-45"
-                          style={{ background: 'rgba(244, 154, 43, 0.95)' }}
-                        ></div>
-                      </div>
-                    )}
                   </div>
-
-                  {/* kWh Label - Outside buttons */}
-                  <span 
-                    className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-medium ml-1 sm:ml-2 flex-shrink-0"
-                    style={{ color: 'rgba(255, 255, 255, 0.8)', fontFamily: 'Montserrat, sans-serif' }}
-                  >
-                    kWh
-                  </span>
                 </div>
               </div>
             </div>
@@ -848,30 +728,34 @@ export function SolarSimulator() {
             className="relative w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close Button */}
-            <button
-              onClick={() => setShowQuoteForm(false)}
-              className="absolute -top-12 right-0 p-2.5 rounded-full transition-all hover:scale-110"
-              style={{
-                background: 'rgba(244, 154, 43, 0.3)',
-                border: '2px solid rgba(244, 154, 43, 0.6)',
-                color: '#F49A2B',
-                cursor: 'pointer',
-                zIndex: 10
-              }}
-            >
-              <X className="w-5 h-5" />
-            </button>
-
             {/* Form Container */}
             <div 
-              className="rounded-2xl p-6 md:p-8"
+              className="rounded-2xl px-6 pb-6 pt-4 md:px-8 md:pb-8 md:pt-2"
               style={{
                 background: 'rgba(30, 30, 30, 0.95)',
                 border: '2px solid rgba(244, 154, 43, 0.3)',
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
               }}
             >
+              {/* Contenedor del Botón */}
+              <div className="flex justify-end mb-2 md:mt-2"> 
+                <button
+                  onClick={() => setShowQuoteForm(false)}
+                  className="p-1.5 rounded-full transition-all hover:scale-110 active:scale-90"
+                  style={{
+                    background: 'rgba(244, 154, 43, 0.15)',
+                    border: '1px solid rgba(244, 154, 43, 0.4)',
+                    color: '#F49A2B',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <X className="w-5 h-5" strokeWidth={2.5} />
+                </button>
+              </div>
+
               {/* Header */}
               <div className="text-center mb-6">
                 <h3 
@@ -889,14 +773,7 @@ export function SolarSimulator() {
               </div>
 
               {/* Form */}
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                // Se consolidan los datos para el envío
-                console.log('Form submitted:', { ...formData, consumption, results });
-                alert('¡Gracias! Recibirás tu cotización en menos de 24 horas.');
-                setShowQuoteForm(false);
-                setFormData({ name: '', contact: '', contactType: 'email' });
-              }}>
+              <form onSubmit={handleSubmit}>
                 {/* Name Input */}
                 <div className="mb-4">
                   <label 
@@ -907,6 +784,7 @@ export function SolarSimulator() {
                   </label>
                   <input
                     type="text"
+                    name="name"
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -928,11 +806,11 @@ export function SolarSimulator() {
                   >
                     Preferencia de contacto
                   </label>
-                  <div className="flex gap-2 mb-3">
+                  <div className="flex flex-wrap gap-2 mb-3">
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, contactType: 'email' })}
-                      className="flex-1 px-4 py-3 rounded-lg font-medium text-sm transition-all flex items-center gap-3"
+                      className="flex-1 min-w-[140px] px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
                         background: formData.contactType === 'email' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
                         color: formData.contactType === 'email' ? '#000' : 'rgba(255, 255, 255, 0.7)',
@@ -940,20 +818,14 @@ export function SolarSimulator() {
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      <img 
-                        src={emailIcon} 
-                        alt="" 
-                        className="w-5 h-5 flex-shrink-0" 
-                        style={{
-                          filter: formData.contactType === 'email' ? 'none' : 'brightness(0.8)'
-                        }}
-                      />
-                      <span className="flex-1 text-left">Email</span>
+                      <img src={emailIcon} alt="" className="w-5 h-5 flex-shrink-0" 
+                          style={{ filter: formData.contactType === 'email' ? 'none' : 'brightness(0.8)' }} />
+                      <span>Email</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, contactType: 'whatsapp' })}
-                      className="flex-1 px-4 py-3 rounded-lg font-medium text-sm transition-all flex items-center gap-3"
+                      className="flex-1 min-w-[140px] px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
                         background: formData.contactType === 'whatsapp' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
                         color: formData.contactType === 'whatsapp' ? '#000' : 'rgba(255, 255, 255, 0.7)',
@@ -961,20 +833,14 @@ export function SolarSimulator() {
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      <img 
-                        src={whatsappIcon} 
-                        alt="" 
-                        className="w-5 h-5 flex-shrink-0" 
-                        style={{
-                          filter: formData.contactType === 'whatsapp' ? 'none' : 'brightness(0.8)'
-                        }}
-                      />
-                      <span className="flex-1 text-left">WhatsApp</span>
+                      <img src={whatsappIcon} alt="" className="w-5 h-5 flex-shrink-0"
+                          style={{ filter: formData.contactType === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
+                      <span>WhatsApp</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Contact Input */}
+                {/* Contact Input con persistencia */}
                 <div className="mb-6">
                   <label 
                     className="block text-sm font-medium mb-2"
@@ -985,9 +851,13 @@ export function SolarSimulator() {
                   <input
                     type={formData.contactType === 'email' ? 'email' : 'tel'}
                     required
-                    value={formData.contact}
-                    onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-                    placeholder={formData.contactType === 'email' ? 'ejemplo@correo.com' : '+57 300 123 4567'}
+                    // Aquí conectamos con la llave específica del estado para que no se borre al cambiar
+                    value={formData.contactType === 'email' ? formData.email : formData.whatsapp}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      [formData.contactType]: e.target.value 
+                    })}
+                    placeholder={formData.contactType === 'email' ? 'ejemplo@correo.com' : '300 123 4567'}
                     className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
                     style={{
                       background: 'rgba(50, 50, 50, 0.8)',
@@ -999,32 +869,36 @@ export function SolarSimulator() {
 
                 {/* Summary */}
                 <div 
-                  className="mb-6 p-4 rounded-lg"
+                  className="mb-6 p-4 rounded-xl"
                   style={{
-                    background: 'rgba(244, 154, 43, 0.1)',
-                    border: '1px solid rgba(244, 154, 43, 0.3)'
+                    background: 'rgba(244, 154, 43, 0.05)',
+                    border: '1px solid rgba(244, 154, 43, 0.2)'
                   }}
                 >
                   <p 
-                    className="text-xs font-medium mb-2"
-                    style={{ color: 'rgba(255, 255, 255, 0.7)', fontFamily: 'Montserrat, sans-serif' }}
+                    className="text-[13px] font-bold mb-3 text-center"
+                    style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}
                   >
-                    Resumen de tu simulación:
+                    Resumen de tu Simulación
                   </p>
-                  <div className="space-y-1">
-                    <p 
-                      className="text-sm font-bold"
+                  
+                  <div className="flex flex-row items-center justify-center w-full border-t border-white/5 pt-3 px-2"> 
+                    <div 
+                      className="flex items-center text-[clamp(10px,3.2vw,14px)] font-bold whitespace-nowrap" 
                       style={{ color: '#F49A2B', fontFamily: 'Montserrat, sans-serif' }}
                     >
-                      {consumption} kWh/mes · {results.paneles} paneles · {formatCurrency(results.precio)}
-                    </p>
+                      <span>{consumption} kWh/mes</span>
+                      <span className="px-1 opacity-40 text-[10px]">•</span>
+                      <span>{results.paneles} paneles</span>
+                      <span className="px-1 opacity-40 text-[10px]">•</span>
+                      <span>{formatCurrency(results.precio)}</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  onClick={handleSubmit}
                   className="w-full py-3.5 rounded-lg font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
                   style={{
                     background: '#F49A2B',
