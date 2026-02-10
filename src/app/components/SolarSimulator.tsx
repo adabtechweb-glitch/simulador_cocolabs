@@ -212,11 +212,13 @@ export function SolarSimulator() {
     setInputValue(consumption.toString());
   }, [consumption]);
 
+  // Este efecto se encarga de avisarle a WordPress que mueva el scroll
   useEffect(() => {
-    if (showQuoteForm) {
+    // Si cualquiera de los dos modales se abre, avisamos al padre
+    if (showQuoteForm || showModal) {
       window.parent.postMessage({ type: 'SOLAR_SIM_CENTER_MODAL' }, '*');
     }
-  }, [showQuoteForm]);
+  }, [showQuoteForm, showModal]); // Escucha ambos estados
 
   // --- HELPERS ---
   const formatCurrency = (amount: number) => 
@@ -672,11 +674,18 @@ export function SolarSimulator() {
       {/* Modal */}
       {showModal && (
         <div 
-          className="fixed inset-0 flex items-center justify-center p-4 md:p-8"
+          className="fixed inset-0 flex items-center justify-center p-4"
           style={{
             background: 'rgba(0, 0, 0, 0.9)',
             zIndex: 9999,
-            backdropFilter: 'blur(8px)'
+            backdropFilter: 'blur(8px)',
+            // Importante: fixed relativo al iframe para que el cálculo 
+            // de WordPress lo deje en el centro del viewport
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0
           }}
           onClick={() => {
             setShowModal(false);
@@ -684,81 +693,24 @@ export function SolarSimulator() {
           }}
         >
           <div 
-            className="relative w-full"
-            style={{
-              maxWidth: isZoomed ? '900px' : '700px',
-              maxHeight: '90vh',
-              transition: 'max-width 0.3s ease'
-            }}
+            className="relative w-full max-w-2xl flex flex-col items-center"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close Button */}
-            <button
-              onClick={() => {
-                setShowModal(false);
-                setIsZoomed(false);
-              }}
-              className="absolute -top-14 right-0 p-3 rounded-full transition-all hover:scale-110"
-              style={{
-                background: 'rgba(244, 154, 43, 0.3)',
-                border: '2px solid rgba(244, 154, 43, 0.6)',
-                color: '#F49A2B',
-                cursor: 'pointer',
-                zIndex: 10
-              }}
+            {/* Botón de cierre y resto del contenido que ya tienes */}
+            <button 
+              onClick={() => setShowModal(false)}
+              className="absolute -top-12 right-0 md:-right-4 p-2 text-orange-500"
             >
-              <X className="w-6 h-6" />
+              <X size={24} />
             </button>
-
-            {/* Zoom Indicator */}
-            {!isZoomed && (
-              <div 
-                className="absolute top-4 right-4 p-2 rounded-full animate-pulse"
-                style={{
-                  background: 'rgba(244, 154, 43, 0.3)',
-                  border: '1px solid rgba(244, 154, 43, 0.6)',
-                  color: '#F49A2B',
-                  zIndex: 10,
-                  pointerEvents: 'none'
-                }}
-              >
-                <ZoomIn className="w-5 h-5" />
-              </div>
-            )}
-
-            {/* Image Container */}
-            <div 
-              className="relative rounded-xl overflow-auto"
-              style={{
-                background: 'rgba(30, 30, 30, 0.95)',
-                border: '2px solid rgba(244, 154, 43, 0.3)',
-                cursor: isZoomed ? 'zoom-out' : 'zoom-in',
-                maxHeight: '75vh'
-              }}
-              onClick={() => setIsZoomed(!isZoomed)}
-            >
-              <img 
-                src={consumptionImageIcon} 
-                alt="Consumo en factura"
-                className="w-full h-auto transition-transform duration-300"
-                style={{
-                  transform: isZoomed ? 'scale(1.8)' : 'scale(1)',
-                  transformOrigin: 'center center',
-                  display: 'block'
-                }}
-              />
-            </div>
-
-            {/* Instructions */}
-            <p 
-              className="text-center mt-4 text-sm font-medium"
-              style={{ 
-                color: 'rgba(255, 255, 255, 0.8)', 
-                fontFamily: 'Montserrat, sans-serif' 
-              }}
-            >
-              {isZoomed ? '🔍 Haz clic para reducir' : '🔍 Haz clic en la imagen para ampliar'}
-            </p>
+            
+            <img 
+              src={consumptionImageIcon} 
+              className="w-full h-auto rounded-lg shadow-2xl border border-orange-500/30"
+              style={{ maxHeight: '70vh', objectFit: 'contain' }}
+            />
+            
+            <p className="mt-4 text-white/60 text-sm">Haz clic afuera para cerrar</p>
           </div>
         </div>
       )}
@@ -959,6 +911,27 @@ export function SolarSimulator() {
                 >
                   Enviar solicitud
                 </button>
+
+                <p 
+                  className="text-center text-xs mt-4"
+                  style={{ color: 'rgb(244, 154, 43)', fontFamily: 'Montserrat, sans-serif' }}
+                >
+                  <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs">
+                    <Lock className="w-3.5 h-3.5" strokeWidth={2} />
+                  <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}>
+                    Al enviar este formulario, aceptas nuestra{" "}
+                    <a 
+                      href={`${window.location.origin}/politica-de-privacidad`} 
+                      target="__blank" 
+                      rel="noopener noreferrer" 
+                      className="underline hover:text-[#F49A2B] transition-colors"
+                      style={{ color: 'rgba(255, 255, 255, 0.8)' }}
+                    >
+                      Política de Privacidad
+                    </a>
+                  </span>
+                </span>
+                </p>
 
                 <p 
                   className="text-center text-xs mt-4"
