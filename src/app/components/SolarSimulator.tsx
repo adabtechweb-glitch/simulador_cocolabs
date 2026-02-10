@@ -732,7 +732,7 @@ export function SolarSimulator() {
           >
             {/* Form Container */}
             <div 
-              className="rounded-2xl px-6 pb-6 pt-4 md:px-8 md:pb-8 md:pt-2"
+              className="rounded-2xl px-5 pb-6 pt-4 md:px-6 md:pb-8 md:pt-2"
               style={{
                 background: 'rgba(30, 30, 30, 0.95)',
                 border: '2px solid rgba(244, 154, 43, 0.3)',
@@ -916,7 +916,7 @@ export function SolarSimulator() {
                   className="text-center text-xs mt-4"
                   style={{ color: 'rgb(244, 154, 43)', fontFamily: 'Montserrat, sans-serif' }}
                 >
-                  <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs">
+                  <span className="inline-flex items-center gap-1.5">
                     <Lock className="w-3.5 h-3.5" strokeWidth={2} />
                   <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}>
                     Al enviar este formulario, aceptas nuestra{" "}
