@@ -123,16 +123,44 @@ export function SolarSimulator() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Extraemos el valor correcto basado en el tipo de contacto seleccionado
-    // para cumplir con la estructura del estado (whatsapp/email)
-    const contactValue = formData.contactType === 'whatsapp' 
-      ? formData.whatsapp 
-      : formData.email;
+    const isEmail = formData.contactType === 'email';
+    const contactValue = isEmail ? formData.email : formData.whatsapp;
 
+    // --- VALIDACIONES POR CASOS ---
+
+    // Caso 1: Nombre vacío o muy corto
+    if (formData.name.trim().length < 3) {
+      setShowQuoteForm(false);
+      showSolarAlert('error', 'Nombre incompleto', 'Por favor, ingresa tu nombre completo.');
+      return; // Detiene la ejecución aquí
+    }
+
+    // Caso 2: Validación de Email
+    if (isEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(contactValue)) {
+        setShowQuoteForm(false);
+        showSolarAlert('error', 'Correo inválido', 'La dirección de correo electrónico no es correcta.');
+        return; // Detiene la ejecución aquí
+      }
+    } 
+    
+    // Caso 3: Validación de Teléfono (WhatsApp)
+    else {
+      const phoneRegex = /^\d{7,15}$/;
+      if (!phoneRegex.test(contactValue)) {
+        setShowQuoteForm(false);
+        showSolarAlert('error', 'Número inválido', 'El número de WhatsApp debe tener entre 7 y 15 dígitos numéricos.');
+        return; // Detiene la ejecución aquí
+      }
+    }
+
+    // --- SI PASA TODAS LAS VALIDACIONES, SE EJECUTA EL ENVÍO ---
+    
     const payload = {
       clientData: {
         name: formData.name,
-        contact: contactValue, // Se envía como 'contact' para el mapeo del PHP
+        contact: contactValue,
         contactType: formData.contactType,
         segmento: consumption <= 3000 ? 'Hogar' : 'Empresa',
         ciudad: '',        
@@ -156,36 +184,26 @@ export function SolarSimulator() {
       });
 
       const data = await response.json();
-      setShowQuoteForm(false);
-
+      
       if (data.status === 'success') {
-        // Definimos el mensaje dinámico según el método de contacto
-        const successMessage = formData.contactType === 'whatsapp'
-          ? 'Un asesor de AdabTech te escribirá a tu WhatsApp muy pronto.'
-          : 'Hemos enviado la información a tu correo electrónico. ¡Revisa tu bandeja de entrada y/o spam!';
-
         setShowQuoteForm(false);
+        const successMsg = isEmail
+          ? 'Tu propuesta llegará pronto a tu correo. ¡No olvides revisar tu bandeja!' 
+          : '¡Perfecto! Te enviaremos un mensaje por WhatsApp en breve.';
+          
+        showSolarAlert('success', '¡Recibido!', successMsg);
 
-        await showSolarAlert(
-          'success',
-          '¡Solicitud enviada!',
-          successMessage
-        );
+        // Reinicia los campos de texto del formulario
+        setFormData({ name: '', contactType: 'whatsapp', whatsapp: '', email: '' });
+
+        // Reinicia el valor del simulador y su campo de texto a 150 (o tu valor inicial)
+        setConsumption(150);
+        setInputValue('150');
       } else {
-        setShowQuoteForm(false);
-        await showSolarAlert(
-          'error',
-          'Hubo un problema',
-          'No pudimos procesar tu solicitud en el servidor. Intenta de nuevo.'
-        );
+        showSolarAlert('error', 'Error de servidor', 'No pudimos procesar los datos. Intenta más tarde.');
       }
     } catch (error) {
-      setShowQuoteForm(false);
-      await showSolarAlert(
-        'error', 
-        'Error de conexión', 
-        'Asegúrate de estar conectado a internet e intenta nuevamente.'
-      );
+      showSolarAlert('error', 'Error de conexión', 'No hubo respuesta del servidor.');
     }
   };
 
