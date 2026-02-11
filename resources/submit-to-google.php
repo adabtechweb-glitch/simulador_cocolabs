@@ -1,319 +1,228 @@
 <?php
 
+/**
+ * API de integración para Google Sheets y Google Forms.
+ * Versión 1.1.7: Formato de respuesta compatible con JS (status: 'success')
+ */
+
 declare(strict_types=1);
 
 namespace App;
 
-date_default_timezone_set('America/Bogota');
+use Exception;
+use Google\Client;
+use Google\Service\Sheets;
 
 /**
- * =========================================================
- * CONFIGURACIÓN
- * =========================================================
+ * CONFIGURACIÓN GLOBAL
  */
+$currentPath = dirname($_SERVER['SCRIPT_FILENAME']);
+
 $config = [
-    'enable_cors' => true,
-    'allowed_origins' => ['https://adabtech-dev.isora.com.co'],
+    'enable_cors'      => true,
+    'allowed_origins'  => ['https://adabtech-dev.isora.com.co'],
+    'spreadsheet_id'   => '1IvE3T8h0by40yEu5kZSNkIOxN5tqg5nAxrqMpYoUNPI',
+    'range'            => 'CONSTANTS-Web-App!B1',
+    'credentials_path' => $currentPath . '/../dependences/service-account-key.json',
+    'autoload_path'    => $currentPath . '/../dependences/vendor/autoload.php',
+    'google_form_url'  => 'https://docs.google.com/forms/d/e/1FAIpQLSfUS3iaygaxc1AzPAPOndYpA-qYARgvylTm8kQKj7dCupxWgA/formResponse',
 ];
 
 /**
- * Class CorsMiddleware
- *
- * Gestiona la protección CORS y permite habilitar o deshabilitar según configuración.
+ * Middleware para gestión de CORS y protección de acceso directo.
  */
 class CorsMiddleware
 {
-    /**
-     * @param array<string> $allowedOrigins Lista de dominios permitidos
-     */
-    public function __construct(private array $allowedOrigins)
-    {
-    }
+    public function __construct(private bool $enabled, private array $allowedOrigins) {}
 
-    /**
-     * Maneja las cabeceras CORS.
-     * Redirige a / si el origen no está permitido.
-     *
-     * @return void
-     */
     public function handle(): void
     {
-        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-
-        if ($origin && !in_array($origin, $this->allowedOrigins, true)) {
-            $this->redirectHome();
+        if (!$this->enabled) {
+            header("Access-Control-Allow-Origin: *");
+            header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+            header('Access-Control-Allow-Headers: Content-Type');
+            return;
         }
 
-        if ($origin) {
-            header("Access-Control-Allow-Origin: $origin");
-        }
+        $origin  = rtrim($_SERVER['HTTP_ORIGIN'] ?? '', '/');
+        $referer = $_SERVER['HTTP_REFERER'] ?? '';
+        $host    = $_SERVER['HTTP_HOST'] ?? '';
 
-        header('Access-Control-Allow-Methods: POST, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type');
-
-        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            http_response_code(204);
+        if (empty($origin) && empty($referer)) {
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+            header("Location: " . $protocol . $host . "/");
             exit;
         }
-    }
 
-    /**
-     * Redirige al home del dominio.
-     *
-     * @return never
-     */
-    private function redirectHome(): never
-    {
-        header('Location: /', true, 302);
+        $isAllowedOrigin = !empty($origin) && in_array($origin, $this->allowedOrigins, true);
+        $isSameOrigin    = !empty($referer) && str_contains($referer, $host);
+
+        if ($isAllowedOrigin || $isSameOrigin) {
+            $headerOrigin = !empty($origin) ? $origin : (((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://") . $host);
+
+            header("Access-Control-Allow-Origin: $headerOrigin");
+            header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+            header('Access-Control-Allow-Headers: Content-Type');
+            header('Access-Control-Allow-Credentials: true');
+
+            if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+                http_response_code(204);
+                exit;
+            }
+            return;
+        }
+
+        http_response_code(403);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode(['status' => 'error', 'data' => 'Origen no autorizado']);
         exit;
     }
 }
 
 /**
- * Class Router
- *
- * Permite definir rutas POST y despachar la solicitud al callback correspondiente.
+ * Enrutador basado en Path Info (soporta .php/)
  */
 class Router
 {
-    /**
-     * @var array<string, array<string, callable>>
-     */
     private array $routes = [];
 
-    /**
-     * Define una ruta POST.
-     *
-     * @param string   $path     Ruta relativa
-     * @param callable $callback Callback que recibe el payload
-     *
-     * @return void
-     */
+    public function get(string $path, callable $callback): void
+    {
+        $this->routes['GET'][$this->normalize($path)] = $callback;
+    }
+
     public function post(string $path, callable $callback): void
     {
-        $this->routes[$path]['POST'] = $callback;
+        $this->routes['POST'][$this->normalize($path)] = $callback;
     }
 
-    /**
-     * Despacha la ruta según REQUEST_METHOD y URI.
-     * Redirige a / si la ruta no existe o el método no coincide.
-     *
-     * @return void
-     */
+    private function normalize(string $path): string
+    {
+        return '/' . trim($path, '/');
+    }
+
     public function dispatch(): void
     {
-        $uri = '/';
+        $pathInfo = $_SERVER['PATH_INFO'] ?? '/';
+        $path = $this->normalize($pathInfo);
         $method = $_SERVER['REQUEST_METHOD'];
 
-        if (!isset($this->routes[$uri][$method])) {
-            $this->redirectHome();
+        if (!isset($this->routes[$method][$path])) {
+            $this->respondJson([
+                'status' => 'error', 
+                'data' => "Ruta no encontrada: $path"
+            ], 404);
         }
 
-        $payload = json_decode(file_get_contents('php://input') ?: '', true);
+        $callback = $this->routes[$method][$path];
 
-        if (!is_array($payload)) {
-            $this->redirectHome();
+        if ($method === 'GET') {
+            call_user_func($callback);
+        } elseif ($method === 'POST') {
+            $payload = json_decode(file_get_contents('php://input') ?: '', true);
+            call_user_func($callback, is_array($payload) ? $payload : []);
         }
-
-        call_user_func($this->routes[$uri][$method], $payload);
     }
 
-    /**
-     * Redirige al home del dominio.
-     *
-     * @return never
-     */
-    private function redirectHome(): never
+    public function respondJson(array $data, int $code = 200): never
     {
-        header('Location: /', true, 302);
+        http_response_code($code);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($data, JSON_UNESCAPED_UNICODE);
         exit;
     }
 }
 
 /**
- * Class GoogleFormHandler
- *
- * Procesa un payload, sanitiza los datos y los envía a un formulario de Google Forms.
+ * Lector de Google Sheets.
+ */
+class GoogleSheetReader
+{
+    public function __construct(private string $spreadsheetId, private string $range, private string $credentialsPath, private string $autoloadPath) {}
+
+    public function getValue(): array
+    {
+        if (!file_exists($this->autoloadPath)) return ['status' => 'error', 'data' => 'Error dependencias'];
+        require_once $this->autoloadPath;
+
+        try {
+            $client = new Client();
+            $client->setAuthConfig($this->credentialsPath);
+            $client->addScope(Sheets::SPREADSHEETS_READONLY);
+            $service = new Sheets($client);
+            $response = $service->spreadsheets_values->get($this->spreadsheetId, $this->range);
+            $values = $response->getValues();
+            
+            if (!empty($values) && isset($values[0][0])) {
+                return ['status' => 'success', 'data' => (string)$values[0][0]];
+            }
+            return ['status' => 'error', 'data' => 'Celda vacía'];
+        } catch (Exception $e) {
+            return ['status' => 'error', 'data' => $e->getMessage()];
+        }
+    }
+}
+
+/**
+ * Manejador de Google Forms.
  */
 class GoogleFormHandler
 {
-    /**
-     * URL del formulario.
-     *
-     * @var string
-     */
-    private string $formUrl;
+    public function __construct(private string $formUrl) {}
 
-    /**
-     * Constructor.
-     *
-     * @param string $formUrl URL del formulario de Google Forms
-     */
-    public function __construct(string $formUrl)
+    public function handle(array $payload): void
     {
-        $this->formUrl = $formUrl;
-    }
-
-    /**
-     * Procesa el payload JSON y envía los datos al formulario.
-     *
-     * @param array<string, mixed> $payload Datos recibidos del router
-     *
-     * @return void
-     */
-    public function process(array $payload): void
-    {
-        $this->cleanOutput();
-
-        if (empty($payload)) {
-            $this->redirectHome();
-        }
-
-        $fields = $this->mapFields($payload);
-
-        if (!$this->sendToGoogleForms($fields)) {
-            $this->redirectHome();
-        }
-
-        $this->respondSuccess();
-    }
-
-    /**
-     * Limpia cualquier buffer de salida.
-     *
-     * @return void
-     */
-    private function cleanOutput(): void
-    {
-        if (ob_get_length()) {
-            ob_clean();
-        }
-    }
-
-    /**
-     * Sanitiza un valor de texto para prevenir XSS.
-     *
-     * @param string $value
-     *
-     * @return string
-     */
-    private function sanitize(string $value): string
-    {
-        return htmlspecialchars(trim($value), ENT_QUOTES, 'UTF-8');
-    }
-
-    /**
-     * Mapea los datos del payload a los campos de Google Forms.
-     *
-     * @param array<string, mixed> $payload
-     *
-     * @return array<string, string>
-     */
-    private function mapFields(array $payload): array
-    {
-        $client = $payload['clientData'] ?? [];
-        $simulation = $payload['simulationResults'] ?? [];
-
-        $contactType = (string) ($client['contactType'] ?? '');
-        $contact = (string) ($client['contact'] ?? '');
-
-        return [
-            'entry.1573315993' => $this->sanitize((string) ($client['name'] ?? '')),
-            'entry.1585523748' => $contactType === 'whatsapp' ? $this->sanitize($contact) : '',
-            'entry.350349042' => $this->sanitize((string) ($client['segmento'] ?? 'Hogar')),
-            'entry.1526130880' => $this->sanitize((string) ($client['ciudad'] ?? '')),
-            'entry.815677826' => $this->sanitize((string) ($client['departamento'] ?? '')),
-            'entry.467572294' => (string) round((float) ($simulation['monthlySavings'] ?? 0)),
-            'entry.2042215689' => (string) round((float) ($simulation['monthlyConsumption'] ?? 0)),
-            'entry.1325827111' => (string) round((float) ($simulation['monthlyConsumption'] ?? 0)),
+        $c = $payload['clientData'] ?? [];
+        $s = $payload['simulationResults'] ?? [];
+        
+        $fields = [
+            'entry.1573315993' => trim((string)($c['name'] ?? '')),
+            'entry.1585523748' => ($c['contactType'] ?? '') === 'whatsapp' ? (string)($c['contact'] ?? '') : '',
+            'entry.350349042'  => trim((string)($c['segmento'] ?? 'Hogar')),
+            'entry.1526130880' => trim((string)($c['ciudad'] ?? '')),
+            'entry.815677826'  => trim((string)($c['departamento'] ?? '')),
+            'entry.467572294'  => (string)round((float)($s['monthlySavings'] ?? 0)),
+            'entry.2042215689' => (string)round((float)($s['monthlyConsumption'] ?? 0)),
+            'entry.1325827111' => (string)round((float)($s['monthlyConsumption'] ?? 0)),
             'entry.1177548502' => 'Acepto el tratamiento de mis datos personales.',
-            'emailAddress' => ($contactType === 'email' && filter_var($contact, FILTER_VALIDATE_EMAIL))
-                ? $contact
-                : 'noreply@example.com',
+            'emailAddress'     => ($c['contactType'] ?? '') === 'email' ? (string)($c['contact'] ?? '') : 'noreply@example.com',
         ];
-    }
 
-    /**
-     * Envía los campos a Google Forms mediante cURL.
-     *
-     * @param array<string, string> $fields
-     *
-     * @return bool
-     */
-    private function sendToGoogleForms(array $fields): bool
-    {
         $ch = curl_init($this->formUrl);
-
-        curl_setopt_array(
-            $ch,
-            [
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => http_build_query($fields),
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_TIMEOUT => 5,
-                CURLOPT_USERAGENT => 'Mozilla/5.0',
-            ]
-        );
-
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($fields),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_USERAGENT => 'Mozilla/5.0 API-Proxy/1.1',
+        ]);
         curl_exec($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-        return !$error && $code >= 200 && $code < 400;
-    }
-
-    /**
-     * Envía respuesta JSON de éxito.
-     *
-     * @return never
-     */
-    private function respondSuccess(): never
-    {
-        header('Content-Type: application/json; charset=UTF-8');
-        echo json_encode(
-            [
-                'status' => 'success',
-                'message' => 'Procesado correctamente',
-                'id' => uniqid('', true),
-            ]
-        );
-        exit;
-    }
-
-    /**
-     * Redirige al home del dominio.
-     *
-     * @return never
-     */
-    private function redirectHome(): never
-    {
-        header('Location: /', true, 302);
+        header('Content-Type: application/json');
+        $isOk = ($code >= 200 && $code < 400);
+        
+        echo json_encode([
+            'status' => $isOk ? 'success' : 'error', 
+            'data'   => $isOk ? 'Éxito' : 'Error en Google Forms'
+        ]);
         exit;
     }
 }
 
-/* ===================== INICIALIZACIÓN ===================== */
+/* --- EJECUCIÓN --- */
 
-if ($config['enable_cors']) {
-    (new CorsMiddleware($config['allowed_origins']))->handle();
-}
+(new CorsMiddleware($config['enable_cors'], $config['allowed_origins']))->handle();
 
 $router = new Router();
 
-/**
- * POST "/" - Envía el payload a GoogleFormHandler
- */
-$router->post(
-    '/',
-    static function (array $payload) {
-        $handler = new GoogleFormHandler(
-            'https://docs.google.com/forms/d/e/1FAIpQLSfUS3iaygaxc1AzPAPOndYpA-qYARgvylTm8kQKj7dCupxWgA/formResponse'
-        );
-        $handler->process($payload);
-    }
-);
+$router->get('/', static function () use ($config, $router): void {
+    $reader = new GoogleSheetReader($config['spreadsheet_id'], $config['range'], $config['credentials_path'], $config['autoload_path']);
+    $router->respondJson($reader->getValue());
+});
 
-// Despachar la ruta
+$router->post('/', static function (array $payload) use ($config): void {
+    (new GoogleFormHandler($config['google_form_url']))->handle($payload);
+});
+
 $router->dispatch();

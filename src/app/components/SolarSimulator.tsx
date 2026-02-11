@@ -16,6 +16,7 @@ export function SolarSimulator() {
   const [showModal, setShowModal] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+  const [tarifaEnergia, setTarifaEnergia] = useState(900);
 
   // Estado persistente del formulario
   const [formData, setFormData] = useState({
@@ -42,7 +43,6 @@ export function SolarSimulator() {
     AREA_POR_PANEL_M2: 3.3,
     INTERCEPTO: 12127227.5,
     PENDIENTE: 25341.4494,
-    TARIFA_ENERGIA: 900,
     FACTOR_RETAIL: 1.3248,
     FACTOR_INDUSTRIAL: 1.0848
   };
@@ -60,7 +60,7 @@ export function SolarSimulator() {
       paneles,
       area,
       potenciaPico: parseFloat(potenciaPico.toFixed(2)),
-      ahorro: Math.round(consumo * CONSTANTS.TARIFA_ENERGIA),
+      ahorro: Math.round(consumo * tarifaEnergia),
     };
   };
 
@@ -219,6 +219,29 @@ export function SolarSimulator() {
       window.parent.postMessage({ type: 'SOLAR_SIM_CENTER_MODAL' }, '*');
     }
   }, [showQuoteForm, showModal]); // Escucha ambos estados
+
+  useEffect(() => {
+    const fetchTarifa = async () => {
+      try {
+        // Usamos window.location.origin para que funcione en local y producción automáticamente
+        const response = await fetch(`${window.location.origin}/submit-to-google.php`, {
+          method: 'GET'
+        });
+        
+        const result = await response.json();
+        
+        if (result.status && result.data) {
+          // Convertimos a número por seguridad
+          setTarifaEnergia(Number(result.data));
+        }
+      } catch (error) {
+        console.error("Error obteniendo la tarifa:", error);
+        // Si falla, se queda con el valor por defecto (900) para no romper la simulación
+      }
+    };
+
+    fetchTarifa();
+  }, []);
 
   // --- HELPERS ---
   const formatCurrency = (amount: number) => 
