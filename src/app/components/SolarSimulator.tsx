@@ -177,7 +177,7 @@ export function SolarSimulator() {
     };
 
     try {
-      const response = await fetch(`${window.location.origin}/submit-to-google.php`, {
+      const response = await fetch(`${window.location.origin}/submit-to-google.php/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
