@@ -237,7 +237,7 @@ export function SolarQuotationModule() {
           </button>
           
           <p className="mt-6 text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-            Sin compromiso · Respuesta en menos de 24 horas
+            Sin compromiso · Respuesta en menos de 10 Minutos
           </p>
         </div>
 
