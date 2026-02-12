@@ -16,6 +16,8 @@ export function SolarSimulator() {
   const [showModal, setShowModal] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+  const [tarifaEnergia, setTarifaEnergia] = useState(900);
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
 
   // Estado persistente del formulario
   const [formData, setFormData] = useState({
@@ -42,8 +44,7 @@ export function SolarSimulator() {
     AREA_POR_PANEL_M2: 3.3,
     INTERCEPTO: 12127227.5,
     PENDIENTE: 25341.4494,
-    TARIFA_ENERGIA: 900,
-    FACTOR_RETAIL: 1.3248,
+    FACTOR_RETAIL: 1.3728,
     FACTOR_INDUSTRIAL: 1.0848
   };
 
@@ -60,7 +61,7 @@ export function SolarSimulator() {
       paneles,
       area,
       potenciaPico: parseFloat(potenciaPico.toFixed(2)),
-      ahorro: Math.round(consumo * CONSTANTS.TARIFA_ENERGIA),
+      ahorro: Math.round(consumo * tarifaEnergia),
     };
   };
 
@@ -78,7 +79,7 @@ export function SolarSimulator() {
 
   const handleInputBlur = () => {
     const numValue = parseInt(inputValue);
-    const finalValue = isNaN(numValue) ? consumption : Math.max(150, Math.min(15000, numValue));
+    const finalValue = isNaN(numValue) ? consumption : Math.max(300, Math.min(15000, numValue));
     setConsumption(finalValue);
     setInputValue(finalValue.toString());
   };
@@ -98,7 +99,7 @@ export function SolarSimulator() {
   // --- LÓGICA DE ETIQUETAS (SOLUCIONA ERROR getConsumptionLabel) ---
   const getConsumptionLevel = () => {
     if (consumption < 1000) return 'bajo';
-    if (consumption < 5000) return 'medio';
+    if (consumption < 3000) return 'medio';
     return 'alto';
   };
 
@@ -120,6 +121,11 @@ export function SolarSimulator() {
     setFormData(prev => ({ ...prev, contactType: method }));
   };
 
+  const showAlert = async (icon: any, title: string, message: string) => {
+    setIsAlertOpen(true); // Activa el centrado en el useEffect
+    return await showSolarAlert(icon, title, message); // Llama a tu función de figma/src/app/components/alert-custom.tsx
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -131,27 +137,53 @@ export function SolarSimulator() {
     // Caso 1: Nombre vacío o muy corto
     if (formData.name.trim().length < 3) {
       setShowQuoteForm(false);
-      showSolarAlert('error', 'Nombre incompleto', 'Por favor, ingresa tu nombre completo.');
+      showAlert('error', 'Nombre incompleto', 'Por favor, ingresa tu nombre completo.');
       return; // Detiene la ejecución aquí
     }
 
     // Caso 2: Validación de Email
     if (isEmail) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(contactValue)) {
+      
+      // 1. Extraemos el dominio completo
+      const domain = contactValue.split('@')[1]?.toLowerCase() || "";
+      
+      // 2. Definimos dominios y TLDs prohibidos según RFC 2606
+      const reservedDomains = ['example.com', 'example.net', 'example.org'];
+      const reservedTLDs = ['.test', '.example', '.invalid', '.localhost'];
+      
+      const isReservedDomain = reservedDomains.includes(domain);
+      const isReservedTLD = reservedTLDs.some(tld => domain.endsWith(tld));
+
+      if (!emailRegex.test(contactValue) || isReservedDomain || isReservedTLD) {
+  
+        let errorMsg = 'La dirección de correo electrónico no es correcta.';
+        if (isReservedDomain || isReservedTLD) {
+          errorMsg = 'Parece que estás usando un dominio de prueba. Por seguridad, requerimos una dirección de correo activa.';
+        }
+
         setShowQuoteForm(false);
-        showSolarAlert('error', 'Correo inválido', 'La dirección de correo electrónico no es correcta.');
-        return; // Detiene la ejecución aquí
+        showAlert('error', 'Correo inválido', errorMsg);
+        return; 
       }
-    } 
+    }
     
     // Caso 3: Validación de Teléfono (WhatsApp)
     else {
       const phoneRegex = /^\d{7,15}$/;
-      if (!phoneRegex.test(contactValue)) {
+      // Verifica si todos los números son iguales (ej: "9999999")
+      const isAllSameDigits = contactValue.split('').every(char => char === contactValue[0]);
+
+      if (!phoneRegex.test(contactValue) || isAllSameDigits) {
         setShowQuoteForm(false);
-        showSolarAlert('error', 'Número inválido', 'El número de WhatsApp debe tener entre 7 y 15 dígitos numéricos.');
-        return; // Detiene la ejecución aquí
+        showAlert(
+          'error', 
+          'Teléfono inválido', 
+          isAllSameDigits 
+            ? 'El número no puede contener solo dígitos repetidos.' 
+            : 'El número debe tener entre 7 y 15 dígitos numéricos.'
+        );
+        return;
       }
     }
 
@@ -177,7 +209,7 @@ export function SolarSimulator() {
     };
 
     try {
-      const response = await fetch(`${window.location.origin}/submit-to-google.php`, {
+      const response = await fetch(`${window.location.origin}/submit-to-google.php/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -191,7 +223,7 @@ export function SolarSimulator() {
           ? 'Tu propuesta llegará pronto a tu correo. ¡No olvides revisar tu bandeja!' 
           : '¡Perfecto! Te enviaremos un mensaje por WhatsApp en breve.';
           
-        showSolarAlert('success', '¡Recibido!', successMsg);
+        showAlert('success', '¡Recibido!', successMsg);
 
         // Reinicia los campos de texto del formulario
         setFormData({ name: '', contactType: 'whatsapp', whatsapp: '', email: '' });
@@ -200,10 +232,10 @@ export function SolarSimulator() {
         setConsumption(150);
         setInputValue('150');
       } else {
-        showSolarAlert('error', 'Error de servidor', 'No pudimos procesar los datos. Intenta más tarde.');
+        showAlert('error', 'Error de servidor', 'No pudimos procesar los datos. Intenta más tarde.');
       }
     } catch (error) {
-      showSolarAlert('error', 'Error de conexión', 'No hubo respuesta del servidor.');
+      showAlert('error', 'Error de conexión', 'No hubo respuesta del servidor.');
     }
   };
 
@@ -214,11 +246,37 @@ export function SolarSimulator() {
 
   // Este efecto se encarga de avisarle a WordPress que mueva el scroll
   useEffect(() => {
-    // Si cualquiera de los dos modales se abre, avisamos al padre
-    if (showQuoteForm || showModal) {
+    if (showQuoteForm || showModal || isAlertOpen) {
       window.parent.postMessage({ type: 'SOLAR_SIM_CENTER_MODAL' }, '*');
+      
+      if (isAlertOpen) {
+        setTimeout(() => setIsAlertOpen(false), 100);
+      }
     }
-  }, [showQuoteForm, showModal]); // Escucha ambos estados
+  }, [showQuoteForm, showModal, isAlertOpen]);
+
+  useEffect(() => {
+    const fetchTarifa = async () => {
+      try {
+        // Usamos window.location.origin para que funcione en local y producción automáticamente
+        const response = await fetch(`${window.location.origin}/submit-to-google.php`, {
+          method: 'GET'
+        });
+        
+        const result = await response.json();
+        
+        if (result.status && result.data) {
+          // Convertimos a número por seguridad
+          setTarifaEnergia(Number(result.data));
+        }
+      } catch (error) {
+        console.error("Error obteniendo la tarifa:", error);
+        // Si falla, se queda con el valor por defecto (900) para no romper la simulación
+      }
+    };
+
+    fetchTarifa();
+  }, []);
 
   // --- HELPERS ---
   const formatCurrency = (amount: number) => 
@@ -732,7 +790,7 @@ export function SolarSimulator() {
           >
             {/* Form Container */}
             <div 
-              className="rounded-2xl px-6 pb-6 pt-4 md:px-8 md:pb-8 md:pt-2"
+              className="rounded-2xl px-5 pb-6 pt-4 md:px-6 md:pb-8 md:pt-2"
               style={{
                 background: 'rgba(30, 30, 30, 0.95)',
                 border: '2px solid rgba(244, 154, 43, 0.3)',
@@ -916,7 +974,7 @@ export function SolarSimulator() {
                   className="text-center text-xs mt-4"
                   style={{ color: 'rgb(244, 154, 43)', fontFamily: 'Montserrat, sans-serif' }}
                 >
-                  <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs">
+                  <span className="inline-flex items-center gap-1.5">
                     <Lock className="w-3.5 h-3.5" strokeWidth={2} />
                   <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}>
                     Al enviar este formulario, aceptas nuestra{" "}
