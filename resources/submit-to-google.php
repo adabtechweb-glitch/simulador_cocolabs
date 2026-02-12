@@ -5,10 +5,9 @@
  *  API Proxy de Integración Google Sheets & Google Forms
  * ---------------------------------------------------------
  *
- * @author    Adabtech
- * @version   1.2.0
+ * @author    Coco Labs S.A.S
+ * @version   2.0.0
  * @year      2026
- * @license   MIT
  *
  * Descripción:
  * Este archivo implementa un endpoint HTTP autónomo en PHP 8.1+

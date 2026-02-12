@@ -10,8 +10,8 @@ import { showSolarAlert } from './alert-custom';
 
 export function SolarSimulator() {
   // --- ESTADOS ---
-  const [consumption, setConsumption] = useState(150);
-  const [inputValue, setInputValue] = useState('150');
+  const [consumption, setConsumption] = useState(300);
+  const [inputValue, setInputValue] = useState('300');
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -50,18 +50,21 @@ export function SolarSimulator() {
 
   // --- LÓGICA DE CÁLCULO ---
   const calculateResults = (consumo: number) => {
-    const potenciaPico = (consumo / 30) / CONSTANTS.HORAS_EFECTIVAS;
+    // Forzamos que el cálculo use al menos 300 aunque el estado diga menos
+    const consumoValidado = Math.max(300, consumo);
+    
+    const potenciaPico = (consumoValidado / 30) / CONSTANTS.HORAS_EFECTIVAS;
     const paneles = Math.floor((potenciaPico * 1000) / CONSTANTS.POTENCIA_PANEL_W);
     const area = Math.floor(paneles * CONSTANTS.AREA_POR_PANEL_M2);
-    const precioBase = CONSTANTS.INTERCEPTO + (CONSTANTS.PENDIENTE * consumo);
-    const factor = consumo <= 3000 ? CONSTANTS.FACTOR_RETAIL : CONSTANTS.FACTOR_INDUSTRIAL;
+    const precioBase = CONSTANTS.INTERCEPTO + (CONSTANTS.PENDIENTE * consumoValidado);
+    const factor = consumoValidado <= 3000 ? CONSTANTS.FACTOR_RETAIL : CONSTANTS.FACTOR_INDUSTRIAL;
 
     return {
       precio: Math.round(precioBase * factor),
       paneles,
       area,
       potenciaPico: parseFloat(potenciaPico.toFixed(2)),
-      ahorro: Math.round(consumo * tarifaEnergia),
+      ahorro: Math.round(consumoValidado * tarifaEnergia),
     };
   };
 
@@ -73,7 +76,7 @@ export function SolarSimulator() {
     setInputValue(value);
     const numValue = parseInt(value);
     if (!isNaN(numValue)) {
-      setConsumption(Math.max(150, Math.min(15000, numValue)));
+      setConsumption(Math.max(300, Math.min(15000, numValue)));
     }
   };
 
@@ -91,7 +94,7 @@ export function SolarSimulator() {
   };
 
   const handleDecrement = () => {
-    const newValue = Math.max(150, consumption - 100);
+    const newValue = Math.max(300, consumption - 100);
     setConsumption(newValue);
     setInputValue(newValue.toString());
   };
@@ -133,6 +136,13 @@ export function SolarSimulator() {
     const contactValue = isEmail ? formData.email : formData.whatsapp;
 
     // --- VALIDACIONES POR CASOS ---
+
+    // --- NUEVA VALIDACIÓN DE CONSUMO MÍNIMO ---
+    if (consumption < 300) {
+      setShowQuoteForm(false);
+      showAlert('error', 'Consumo insuficiente', 'El consumo mínimo para realizar la simulación es de 300 kWh/mes.');
+      return;
+    }
 
     // Caso 1: Nombre vacío o muy corto
     if (formData.name.trim().length < 3) {
@@ -229,8 +239,8 @@ export function SolarSimulator() {
         setFormData({ name: '', contactType: 'whatsapp', whatsapp: '', email: '' });
 
         // Reinicia el valor del simulador y su campo de texto a 150 (o tu valor inicial)
-        setConsumption(150);
-        setInputValue('150');
+        setConsumption(300);
+        setInputValue('300');
       } else {
         showAlert('error', 'Error de servidor', 'No pudimos procesar los datos. Intenta más tarde.');
       }
@@ -724,7 +734,7 @@ export function SolarSimulator() {
             className="mt-4 text-sm"
             style={{ color: 'rgba(255, 255, 255, 0.6)', fontFamily: 'Montserrat, sans-serif' }}
           >
-            Atención personalizada · Respuesta garantizada en menos de 24 horas
+            Atención personalizada · Respuesta garantizada en menos de 10 Minutos
           </p>
         </div>
       </div>
