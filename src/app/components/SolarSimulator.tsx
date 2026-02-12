@@ -44,7 +44,7 @@ export function SolarSimulator() {
     AREA_POR_PANEL_M2: 3.3,
     INTERCEPTO: 12127227.5,
     PENDIENTE: 25341.4494,
-    FACTOR_RETAIL: 1.3248,
+    FACTOR_RETAIL: 1.3728,
     FACTOR_INDUSTRIAL: 1.0848
   };
 
@@ -79,7 +79,7 @@ export function SolarSimulator() {
 
   const handleInputBlur = () => {
     const numValue = parseInt(inputValue);
-    const finalValue = isNaN(numValue) ? consumption : Math.max(150, Math.min(15000, numValue));
+    const finalValue = isNaN(numValue) ? consumption : Math.max(300, Math.min(15000, numValue));
     setConsumption(finalValue);
     setInputValue(finalValue.toString());
   };
@@ -99,7 +99,7 @@ export function SolarSimulator() {
   // --- LÓGICA DE ETIQUETAS (SOLUCIONA ERROR getConsumptionLabel) ---
   const getConsumptionLevel = () => {
     if (consumption < 1000) return 'bajo';
-    if (consumption < 5000) return 'medio';
+    if (consumption < 3000) return 'medio';
     return 'alto';
   };
 
