@@ -23,8 +23,8 @@ export function SolarSimulator() {
   const [formData, setFormData] = useState({
     name: '',
     contactType: 'whatsapp' as 'whatsapp' | 'email',
-    whatsapp: '', 
-    email: ''     
+    whatsapp: '',
+    email: ''
   });
 
   // --- REFERENCIAS (REFS) ---
@@ -52,7 +52,7 @@ export function SolarSimulator() {
   const calculateResults = (consumo: number) => {
     // Forzamos que el cálculo use al menos 300 aunque el estado diga menos
     const consumoValidado = Math.max(300, consumo);
-    
+
     const potenciaPico = (consumoValidado / 30) / CONSTANTS.HORAS_EFECTIVAS;
     const paneles = Math.floor((potenciaPico * 1000) / CONSTANTS.POTENCIA_PANEL_W);
     const area = Math.floor(paneles * CONSTANTS.AREA_POR_PANEL_M2);
@@ -76,19 +76,19 @@ export function SolarSimulator() {
     setInputValue(value);
     const numValue = parseInt(value);
     if (!isNaN(numValue)) {
-      setConsumption(Math.max(300, Math.min(15000, numValue)));
+      setConsumption(Math.max(300, Math.min(30000, numValue)));
     }
   };
 
   const handleInputBlur = () => {
     const numValue = parseInt(inputValue);
-    const finalValue = isNaN(numValue) ? consumption : Math.max(300, Math.min(15000, numValue));
+    const finalValue = isNaN(numValue) ? consumption : Math.max(300, Math.min(30000, numValue));
     setConsumption(finalValue);
     setInputValue(finalValue.toString());
   };
 
   const handleIncrement = () => {
-    const newValue = Math.min(15000, consumption + 100);
+    const newValue = Math.min(30000, consumption + 100);
     setConsumption(newValue);
     setInputValue(newValue.toString());
   };
@@ -154,19 +154,19 @@ export function SolarSimulator() {
     // Caso 2: Validación de Email
     if (isEmail) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      
+
       // 1. Extraemos el dominio completo
       const domain = contactValue.split('@')[1]?.toLowerCase() || "";
-      
+
       // 2. Definimos dominios y TLDs prohibidos según RFC 2606
       const reservedDomains = ['example.com', 'example.net', 'example.org'];
       const reservedTLDs = ['.test', '.example', '.invalid', '.localhost'];
-      
+
       const isReservedDomain = reservedDomains.includes(domain);
       const isReservedTLD = reservedTLDs.some(tld => domain.endsWith(tld));
 
       if (!emailRegex.test(contactValue) || isReservedDomain || isReservedTLD) {
-  
+
         let errorMsg = 'La dirección de correo electrónico no es correcta.';
         if (isReservedDomain || isReservedTLD) {
           errorMsg = 'Parece que estás usando un dominio de prueba. Por seguridad, requerimos una dirección de correo activa.';
@@ -174,10 +174,10 @@ export function SolarSimulator() {
 
         setShowQuoteForm(false);
         showAlert('error', 'Correo inválido', errorMsg);
-        return; 
+        return;
       }
     }
-    
+
     // Caso 3: Validación de Teléfono (WhatsApp)
     else {
       const phoneRegex = /^\d{7,15}$/;
@@ -187,10 +187,10 @@ export function SolarSimulator() {
       if (!phoneRegex.test(contactValue) || isAllSameDigits) {
         setShowQuoteForm(false);
         showAlert(
-          'error', 
-          'Teléfono inválido', 
-          isAllSameDigits 
-            ? 'El número no puede contener solo dígitos repetidos.' 
+          'error',
+          'Teléfono inválido',
+          isAllSameDigits
+            ? 'El número no puede contener solo dígitos repetidos.'
             : 'El número debe tener entre 7 y 15 dígitos numéricos.'
         );
         return;
@@ -198,20 +198,20 @@ export function SolarSimulator() {
     }
 
     // --- SI PASA TODAS LAS VALIDACIONES, SE EJECUTA EL ENVÍO ---
-    
+
     const payload = {
       clientData: {
         name: formData.name,
         contact: contactValue,
         contactType: formData.contactType,
         segmento: consumption <= 3000 ? 'Hogar' : 'Empresa',
-        ciudad: '',        
-        departamento: ''   
+        ciudad: '',
+        departamento: ''
       },
       simulationResults: {
         monthlyConsumption: consumption,
         estimatedInvestment: results.precio,
-        panelsCount: results.paneles, 
+        panelsCount: results.paneles,
         requiredArea: results.area,
         peakPower: results.potenciaPico,
         monthlySavings: results.ahorro
@@ -226,13 +226,13 @@ export function SolarSimulator() {
       });
 
       const data = await response.json();
-      
+
       if (data.status === 'success') {
         setShowQuoteForm(false);
         const successMsg = isEmail
-          ? 'Tu propuesta llegará pronto a tu correo. ¡No olvides revisar tu bandeja!' 
+          ? 'Tu propuesta llegará pronto a tu correo. ¡No olvides revisar tu bandeja!'
           : '¡Perfecto! Te enviaremos un mensaje por WhatsApp en breve.';
-          
+
         showAlert('success', '¡Recibido!', successMsg);
 
         // Reinicia los campos de texto del formulario
@@ -258,7 +258,7 @@ export function SolarSimulator() {
   useEffect(() => {
     if (showQuoteForm || showModal || isAlertOpen) {
       window.parent.postMessage({ type: 'SOLAR_SIM_CENTER_MODAL' }, '*');
-      
+
       if (isAlertOpen) {
         setTimeout(() => setIsAlertOpen(false), 100);
       }
@@ -272,9 +272,9 @@ export function SolarSimulator() {
         const response = await fetch(`${window.location.origin}/submit-to-google.php`, {
           method: 'GET'
         });
-        
+
         const result = await response.json();
-        
+
         if (result.status && result.data) {
           // Convertimos a número por seguridad
           setTarifaEnergia(Number(result.data));
@@ -289,11 +289,11 @@ export function SolarSimulator() {
   }, []);
 
   // --- HELPERS ---
-  const formatCurrency = (amount: number) => 
+  const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
 
   return (
-    <section 
+    <section
       className="relative w-full min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-16 overflow-hidden"
       style={{
         background: '#000000',
@@ -302,7 +302,7 @@ export function SolarSimulator() {
     >
       {/* Atmospheric background */}
       <div className="absolute inset-0 opacity-20">
-        <div 
+        <div
           className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full blur-3xl"
           style={{ background: 'radial-gradient(circle, rgba(26, 184, 215, 0.25) 0%, transparent 70%)' }}
         ></div>
@@ -311,19 +311,19 @@ export function SolarSimulator() {
       <div className="relative z-10 w-full max-w-4xl">
         {/* Header Section */}
         <div className="text-center mb-12">
-          <h1 
+          <h1
             className="text-4xl md:text-5xl font-bold mb-6 tracking-tight leading-tight"
             style={{ color: '#F49A2B' }}
           >
             Simula tu sistema solar en minutos
           </h1>
-          <h2 
+          <h2
             className="text-2xl md:text-3xl font-semibold mb-5 text-white"
             style={{ fontFamily: 'Montserrat, sans-serif' }}
           >
             Calcula tu consumo promedio mensual de energía y descubre cuánto puedes ahorrar con energía solar.
           </h2>
-          <p 
+          <p
             className="text-base md:text-lg leading-relaxed max-w-3xl mx-auto"
             style={{ color: 'rgba(255, 255, 255, 0.7)', fontFamily: 'Montserrat, sans-serif' }}
           >
@@ -352,7 +352,7 @@ export function SolarSimulator() {
         </div>
 
         {/* Main Simulator Card */}
-        <div 
+        <div
           className="relative rounded-2xl p-8 md:p-12 mb-8"
           style={{
             background: 'rgba(30, 30, 30, 0.6)',
@@ -364,7 +364,7 @@ export function SolarSimulator() {
           <div className="text-center mb-12">
             {/* Título con icono info */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 mb-6 px-4">
-              <p 
+              <p
                 className="text-sm md:text-base font-medium uppercase tracking-wider text-center"
                 style={{ color: 'rgba(255, 255, 255, 0.8)', fontFamily: 'Montserrat, sans-serif' }}
               >
@@ -386,7 +386,7 @@ export function SolarSimulator() {
                 >
                   <Info className="w-3.5 h-3.5 md:w-4 md:h-4" />
                 </button>
-                
+
                 {/* Tooltip */}
                 {showTooltip === 'question' && (
                   <div
@@ -408,9 +408,9 @@ export function SolarSimulator() {
                 )}
               </div>
             </div>
-            
+
             <div className="relative" ref={consumptionDisplayRef}>
-              <div 
+              <div
                 className="relative rounded-lg sm:rounded-xl px-3 sm:px-6 py-3 sm:py-4 border-2 mx-auto"
                 style={{
                   background: 'rgba(50, 40, 30, 0.5)',
@@ -446,13 +446,13 @@ export function SolarSimulator() {
                     <input
                       ref={inputRef}
                       type="number"
-                      min="150"
-                      max="15000"
+                      min="300"
+                      max="30000"
                       value={inputValue}
                       onChange={handleInputChange}
                       onBlur={handleInputBlur}
                       className="text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight text-center bg-transparent border-none outline-none"
-                      style={{ 
+                      style={{
                         color: '#F49A2B',
                         width: `${inputValue.toString().length + 0.5}ch`,
                         minWidth: '2ch',
@@ -461,7 +461,7 @@ export function SolarSimulator() {
                         cursor: 'text'
                       }}
                     />
-                    <span 
+                    <span
                       className="text-base sm:text-2xl font-medium"
                       style={{ color: 'rgba(255, 255, 255, 0.8)', fontFamily: 'Montserrat, sans-serif' }}
                     >
@@ -498,8 +498,8 @@ export function SolarSimulator() {
               <input
                 ref={sliderRef}
                 type="range"
-                min="150"
-                max="15000"
+                min="300"
+                max="30000"
                 step="50"
                 value={consumption}
                 onChange={(e) => setConsumption(Number(e.target.value))}
@@ -512,7 +512,7 @@ export function SolarSimulator() {
                   outline: 'none'
                 }}
               />
-              
+
               {/* Tooltip del slider */}
               {showTooltip === 'slider' && (
                 <div
@@ -532,22 +532,22 @@ export function SolarSimulator() {
                   ></div>
                 </div>
               )}
-              
+
               {/* Slider Labels */}
               <div className="flex justify-between mt-3 px-2">
-                <span 
+                <span
                   className="text-sm font-medium"
                   style={{ color: 'rgba(255, 255, 255, 0.6)', fontFamily: 'Montserrat, sans-serif' }}
                 >
                   Bajo
                 </span>
-                <span 
+                <span
                   className="text-sm font-medium"
                   style={{ color: 'rgba(255, 255, 255, 0.7)', fontFamily: 'Montserrat, sans-serif' }}
                 >
                   Medio
                 </span>
-                <span 
+                <span
                   className="text-sm font-medium"
                   style={{ color: 'rgba(255, 255, 255, 0.8)', fontFamily: 'Montserrat, sans-serif' }}
                 >
@@ -558,7 +558,7 @@ export function SolarSimulator() {
 
             {/* Consumption Level Label */}
             <div className="text-center mt-2">
-              <p 
+              <p
                 className="text-sm"
                 style={{ color: 'rgba(255, 255, 255, 0.6)', fontFamily: 'Montserrat, sans-serif' }}
               >
@@ -571,7 +571,7 @@ export function SolarSimulator() {
         {/* Results Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {/* Investment Card */}
-          <div 
+          <div
             ref={el => { cardsRef.current[0] = el; }}
             className="rounded-xl p-6"
             style={{
@@ -580,26 +580,26 @@ export function SolarSimulator() {
             }}
           >
             <div className="relative z-10 flex items-start gap-4">
-              <div 
+              <div
                 className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={estimatedInvestmentIcon} alt="Inversión" className="w-6 h-6" />
               </div>
               <div className="flex-1">
-                <div 
+                <div
                   className="text-xl font-bold mb-1"
                   style={{ color: '#F49A2B' }}
                 >
                   {formatCurrency(results.precio).replace(/\s/g, '')}
                 </div>
-                <div 
+                <div
                   className="text-xs font-medium mb-1"
                   style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                 >
                   Inversión estimada
                 </div>
-                <div 
+                <div
                   className="text-xs"
                   style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}
                 >
@@ -610,7 +610,7 @@ export function SolarSimulator() {
           </div>
 
           {/* Savings Card */}
-          <div 
+          <div
             ref={el => { cardsRef.current[1] = el; }}
             className="rounded-xl p-6"
             style={{
@@ -619,26 +619,26 @@ export function SolarSimulator() {
             }}
           >
             <div className="relative z-10 flex items-start gap-4">
-              <div 
+              <div
                 className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={monthlySavingsIcon} alt="Ahorro" className="w-6 h-6" />
               </div>
               <div className="flex-1">
-                <div 
+                <div
                   className="text-xl font-bold mb-1"
                   style={{ color: '#F49A2B' }}
                 >
                   {formatCurrency(results.ahorro).replace(/\s/g, '')}
                 </div>
-                <div 
+                <div
                   className="text-xs font-medium mb-1"
                   style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                 >
                   Ahorro mensual aprox.
                 </div>
-                <div 
+                <div
                   className="text-xs"
                   style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}
                 >
@@ -649,7 +649,7 @@ export function SolarSimulator() {
           </div>
 
           {/* System Card */}
-          <div 
+          <div
             ref={el => { cardsRef.current[2] = el; }}
             className="rounded-xl p-6"
             style={{
@@ -658,26 +658,26 @@ export function SolarSimulator() {
             }}
           >
             <div className="relative z-10 flex items-start gap-4">
-              <div 
+              <div
                 className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={solarPanelsIcon} alt="Paneles" className="w-6 h-6" />
               </div>
               <div className="flex-1">
-                <div 
+                <div
                   className="text-xl font-bold mb-1"
                   style={{ color: '#F49A2B' }}
                 >
                   {results.paneles}
                 </div>
-                <div 
+                <div
                   className="text-xs font-medium mb-1"
                   style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                 >
                   Paneles solares
                 </div>
-                <div 
+                <div
                   className="text-xs"
                   style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}
                 >
@@ -729,8 +729,8 @@ export function SolarSimulator() {
               </div>
             )}
           </div>
-          
-          <p 
+
+          <p
             className="mt-4 text-sm"
             style={{ color: 'rgba(255, 255, 255, 0.6)', fontFamily: 'Montserrat, sans-serif' }}
           >
@@ -741,7 +741,7 @@ export function SolarSimulator() {
 
       {/* Modal */}
       {showModal && (
-        <div 
+        <div
           className="fixed inset-0 flex items-center justify-center p-4"
           style={{
             background: 'rgba(0, 0, 0, 0.9)',
@@ -760,24 +760,24 @@ export function SolarSimulator() {
             setIsZoomed(false);
           }}
         >
-          <div 
+          <div
             className="relative w-full max-w-2xl flex flex-col items-center"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Botón de cierre y resto del contenido que ya tienes */}
-            <button 
+            <button
               onClick={() => setShowModal(false)}
               className="absolute -top-12 right-0 md:-right-4 p-2 text-orange-500"
             >
               <X size={24} />
             </button>
-            
-            <img 
-              src={consumptionImageIcon} 
+
+            <img
+              src={consumptionImageIcon}
               className="w-full h-auto rounded-lg shadow-2xl border border-orange-500/30"
               style={{ maxHeight: '70vh', objectFit: 'contain' }}
             />
-            
+
             <p className="mt-4 text-white/60 text-sm">Haz clic afuera para cerrar</p>
           </div>
         </div>
@@ -785,7 +785,7 @@ export function SolarSimulator() {
 
       {/* Quote Form Modal */}
       {showQuoteForm && (
-        <div 
+        <div
           className="fixed inset-0 flex items-center justify-center p-4 md:p-8"
           style={{
             background: 'rgba(0, 0, 0, 0.9)',
@@ -794,12 +794,12 @@ export function SolarSimulator() {
           }}
           onClick={() => setShowQuoteForm(false)}
         >
-          <div 
+          <div
             className="relative w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Form Container */}
-            <div 
+            <div
               className="rounded-2xl px-5 pb-6 pt-4 md:px-6 md:pb-8 md:pt-2"
               style={{
                 background: 'rgba(30, 30, 30, 0.95)',
@@ -808,7 +808,7 @@ export function SolarSimulator() {
               }}
             >
               {/* Contenedor del Botón */}
-              <div className="flex justify-end mb-2 md:mt-2"> 
+              <div className="flex justify-end mb-2 md:mt-2">
                 <button
                   onClick={() => setShowQuoteForm(false)}
                   className="p-1.5 rounded-full transition-all hover:scale-110 active:scale-90"
@@ -828,13 +828,13 @@ export function SolarSimulator() {
 
               {/* Header */}
               <div className="text-center mb-6">
-                <h3 
+                <h3
                   className="text-2xl md:text-3xl font-bold mb-2"
                   style={{ color: '#F49A2B', fontFamily: 'Manrope, sans-serif' }}
                 >
                   Solicita tu cotización
                 </h3>
-                <p 
+                <p
                   className="text-sm"
                   style={{ color: 'rgba(255, 255, 255, 0.7)', fontFamily: 'Montserrat, sans-serif' }}
                 >
@@ -846,7 +846,7 @@ export function SolarSimulator() {
               <form onSubmit={handleSubmit}>
                 {/* Name Input */}
                 <div className="mb-4">
-                  <label 
+                  <label
                     className="block text-sm font-medium mb-2"
                     style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                   >
@@ -870,7 +870,7 @@ export function SolarSimulator() {
 
                 {/* Contact Type Toggle */}
                 <div className="mb-4">
-                  <label 
+                  <label
                     className="block text-sm font-medium mb-2"
                     style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                   >
@@ -888,8 +888,8 @@ export function SolarSimulator() {
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      <img src={emailIcon} alt="" className="w-5 h-5 flex-shrink-0" 
-                          style={{ filter: formData.contactType === 'email' ? 'none' : 'brightness(0.8)' }} />
+                      <img src={emailIcon} alt="" className="w-5 h-5 flex-shrink-0"
+                        style={{ filter: formData.contactType === 'email' ? 'none' : 'brightness(0.8)' }} />
                       <span>Email</span>
                     </button>
                     <button
@@ -904,7 +904,7 @@ export function SolarSimulator() {
                       }}
                     >
                       <img src={whatsappIcon} alt="" className="w-5 h-5 flex-shrink-0"
-                          style={{ filter: formData.contactType === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
+                        style={{ filter: formData.contactType === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
                       <span>WhatsApp</span>
                     </button>
                   </div>
@@ -912,7 +912,7 @@ export function SolarSimulator() {
 
                 {/* Contact Input con persistencia */}
                 <div className="mb-6">
-                  <label 
+                  <label
                     className="block text-sm font-medium mb-2"
                     style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                   >
@@ -923,9 +923,9 @@ export function SolarSimulator() {
                     required
                     // Aquí conectamos con la llave específica del estado para que no se borre al cambiar
                     value={formData.contactType === 'email' ? formData.email : formData.whatsapp}
-                    onChange={(e) => setFormData({ 
-                      ...formData, 
-                      [formData.contactType]: e.target.value 
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      [formData.contactType]: e.target.value
                     })}
                     placeholder={formData.contactType === 'email' ? 'ejemplo@correo.com' : '300 123 4567'}
                     className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
@@ -938,23 +938,23 @@ export function SolarSimulator() {
                 </div>
 
                 {/* Summary */}
-                <div 
+                <div
                   className="mb-6 p-4 rounded-xl"
                   style={{
                     background: 'rgba(244, 154, 43, 0.05)',
                     border: '1px solid rgba(244, 154, 43, 0.2)'
                   }}
                 >
-                  <p 
+                  <p
                     className="text-[13px] font-bold mb-3 text-center"
                     style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}
                   >
                     Resumen de tu Simulación
                   </p>
-                  
-                  <div className="flex flex-row items-center justify-center w-full border-t border-white/5 pt-3 px-2"> 
-                    <div 
-                      className="flex items-center text-[clamp(10px,3.2vw,14px)] font-bold whitespace-nowrap" 
+
+                  <div className="flex flex-row items-center justify-center w-full border-t border-white/5 pt-3 px-2">
+                    <div
+                      className="flex items-center text-[clamp(10px,3.2vw,14px)] font-bold whitespace-nowrap"
                       style={{ color: '#F49A2B', fontFamily: 'Montserrat, sans-serif' }}
                     >
                       <span>{consumption} kWh/mes</span>
@@ -980,28 +980,28 @@ export function SolarSimulator() {
                   Enviar solicitud
                 </button>
 
-                <p 
+                <p
                   className="text-center text-xs mt-4"
                   style={{ color: 'rgb(244, 154, 43)', fontFamily: 'Montserrat, sans-serif' }}
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <Lock className="w-3.5 h-3.5" strokeWidth={2} />
-                  <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}>
-                    Al enviar este formulario, aceptas nuestra{" "}
-                    <a 
-                      href={`${window.location.origin}/politica-de-privacidad`} 
-                      target="__blank" 
-                      rel="noopener noreferrer" 
-                      className="underline hover:text-[#F49A2B] transition-colors"
-                      style={{ color: 'rgba(255, 255, 255, 0.8)' }}
-                    >
-                      Política de Privacidad
-                    </a>
+                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}>
+                      Al enviar este formulario, aceptas nuestra{" "}
+                      <a
+                        href={`${window.location.origin}/politica-de-privacidad`}
+                        target="__blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-[#F49A2B] transition-colors"
+                        style={{ color: 'rgba(255, 255, 255, 0.8)' }}
+                      >
+                        Política de Privacidad
+                      </a>
+                    </span>
                   </span>
-                </span>
                 </p>
 
-                <p 
+                <p
                   className="text-center text-xs mt-4"
                   style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Montserrat, sans-serif' }}
                 >
