@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Zap, Grid3x3, Maximize, TrendingUp, X, ZoomIn, ChevronUp, ChevronDown, Info, Lock } from 'lucide-react';
+import { Zap, Grid3x3, Maximize, TrendingUp, X, ZoomIn, ChevronUp, ChevronDown, Info, Lock, MapPin, CheckCircle, Loader } from 'lucide-react';
 import consumptionImageIcon from '../assets/consumption_image_icon.png';
 import estimatedInvestmentIcon from '../assets/estimated_investment_icon.svg';
 import monthlySavingsIcon from '../assets/monthly_savings_icon.svg';
@@ -7,6 +7,7 @@ import solarPanelsIcon from '../assets/solar_panels_icon.svg';
 import emailIcon from '../assets/main_icon.svg';
 import whatsappIcon from '../assets/whatsapp_icon.svg';
 import { showSolarAlert } from './alert-custom';
+import { submitToQuoteApi } from './submitToQuoteApi';
 
 export function SolarSimulator() {
   // --- ESTADOS ---
@@ -22,10 +23,18 @@ export function SolarSimulator() {
   // Estado persistente del formulario
   const [formData, setFormData] = useState({
     name: '',
-    contactType: 'whatsapp' as 'whatsapp' | 'email',
-    whatsapp: '',
-    email: ''
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    department: '',
+    location_maps: '',
+    preferredContact: 'whatsapp' as 'whatsapp' | 'email'
   });
+
+  // Estado del campo de ubicación
+  const [locationMode, setLocationMode] = useState<'idle' | 'detecting' | 'detected' | 'manual'>('idle');
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
 
   // --- REFERENCIAS (REFS) ---
   // Se agregan todas las que pide tu JSX para evitar errores de "Cannot find name"
@@ -113,17 +122,124 @@ export function SolarSimulator() {
     return 'Comercial/Industrial - Consumo alto';
   };
 
+  const sanitizeLocationToken = (value: string) => {
+    return (value || '')
+      .replace(/^per[ií]metro\s+urbano\s+(de\s+)?/i, '')
+      .replace(/^zona\s+urbana\s+(de\s+)?/i, '')
+      .replace(/^area\s+metropolitana\s+(de\s+)?/i, '')
+      .replace(/^área\s+metropolitana\s+(de\s+)?/i, '')
+      .replace(/^municipio\s+de\s+/i, '')
+      .replace(/^distrito\s+de\s+/i, '')
+      .trim();
+  };
+
+  // --- HANDLERS DE UBICACIÓN ---
+  const reverseGeocode = async (lat: number, lon: number): Promise<{ address: string; city: string; department: string; label: string }> => {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`
+    );
+    const data = await res.json();
+    const addr = data.address || {};
+
+    const cityCandidates = [
+      addr.city,
+      addr.town,
+      addr.municipality,
+      addr.village,
+      addr.county,
+      data.name,
+    ]
+      .map((item: string | undefined) => sanitizeLocationToken((item || '').trim()))
+      .filter(Boolean);
+
+    const city = cityCandidates[0] || '';
+
+    const address = [
+      sanitizeLocationToken((addr.road || '').trim()),
+      sanitizeLocationToken((addr.house_number || '').trim()),
+      sanitizeLocationToken(((addr.neighbourhood || addr.suburb || addr.quarter || '') as string).trim()),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    const department = sanitizeLocationToken((
+      addr.state ||
+      addr.region ||
+      addr.state_district ||
+      ''
+    ).trim());
+
+    const parts = [
+      addr.road,
+      addr.neighbourhood || addr.suburb || addr.quarter,
+      city,
+      department,
+    ].filter(Boolean);
+
+    return {
+      address,
+      city,
+      department,
+      label: parts.join(', '),
+    };
+  };
+
+  const handleDetectLocation = () => {
+    setLocationMode('detecting');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const locationData = await reverseGeocode(latitude, longitude);
+        const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+        setLocationCoords({ lat: latitude, lon: longitude });
+        setFormData(prev => ({
+          ...prev,
+          address: locationData.address,
+          city: locationData.city,
+          department: locationData.department,
+          location_maps: mapsUrl,
+        }));
+        setLocationMode('detected');
+      },
+      () => {
+        setLocationMode('manual');
+      },
+      { timeout: 10000 }
+    );
+  };
+
+  const getLocationInputValue = () => {
+    return [formData.address, formData.city, formData.department]
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join(', ');
+  };
+
+  const applyLocationInput = (value: string) => {
+    const normalized = value.trim();
+    const parts = normalized.split(',').map((part) => part.trim()).filter(Boolean);
+
+    if (parts.length >= 3) {
+      const department = sanitizeLocationToken(parts[parts.length - 1]);
+      const city = sanitizeLocationToken(parts[parts.length - 2]);
+      const address = parts.slice(0, -2).join(', ');
+      setFormData({ ...formData, address, city, department });
+      return;
+    }
+
+    if (parts.length === 2) {
+      const [cityRaw, departmentRaw] = parts;
+      const city = sanitizeLocationToken(cityRaw);
+      const department = sanitizeLocationToken(departmentRaw);
+      setFormData({ ...formData, address: '', city, department });
+      return;
+    }
+
+    const singleToken = sanitizeLocationToken(normalized);
+    setFormData({ ...formData, address: normalized, city: singleToken, department: '' });
+  };
+
   // --- HANDLERS DEL FORMULARIO ---
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    const targetField = name || formData.contactType;
-    setFormData(prev => ({ ...prev, [targetField]: value }));
-  };
-
-  const handleContactMethodChange = (method: 'whatsapp' | 'email') => {
-    setFormData(prev => ({ ...prev, contactType: method }));
-  };
-
   const showAlert = async (icon: any, title: string, message: string) => {
     setIsAlertOpen(true); // Activa el centrado en el useEffect
     return await showSolarAlert(icon, title, message); // Llama a tu función de figma/src/app/components/alert-custom.tsx
@@ -131,9 +247,6 @@ export function SolarSimulator() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const isEmail = formData.contactType === 'email';
-    const contactValue = isEmail ? formData.email : formData.whatsapp;
 
     // --- VALIDACIONES POR CASOS ---
 
@@ -148,65 +261,56 @@ export function SolarSimulator() {
     if (formData.name.trim().length < 3) {
       setShowQuoteForm(false);
       showAlert('error', 'Nombre incompleto', 'Por favor, ingresa tu nombre completo.');
-      return; // Detiene la ejecución aquí
+      return;
     }
 
-    // Caso 2: Validación de Email
-    if (isEmail) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // Caso 2 & 3: Validación de Email O Teléfono (al menos uno debe ser válido)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^\d{7,15}$/;
+    
+    const cleanPhone = formData.phone.replace(/\s/g, '');
+    const isAllSameDigits = cleanPhone.split('').every(char => char === cleanPhone[0]);
+    
+    const domain = formData.email.split('@')[1]?.toLowerCase() || "";
+    const reservedDomains = ['example.com', 'example.net', 'example.org'];
+    const reservedTLDs = ['.test', '.example', '.invalid', '.localhost'];
+    const isReservedDomain = reservedDomains.includes(domain);
+    const isReservedTLD = reservedTLDs.some(tld => domain.endsWith(tld));
+    
+    const isEmailValid = emailRegex.test(formData.email) && !isReservedDomain && !isReservedTLD;
+    const isPhoneValid = phoneRegex.test(cleanPhone) && !isAllSameDigits;
 
-      // 1. Extraemos el dominio completo
-      const domain = contactValue.split('@')[1]?.toLowerCase() || "";
-
-      // 2. Definimos dominios y TLDs prohibidos según RFC 2606
-      const reservedDomains = ['example.com', 'example.net', 'example.org'];
-      const reservedTLDs = ['.test', '.example', '.invalid', '.localhost'];
-
-      const isReservedDomain = reservedDomains.includes(domain);
-      const isReservedTLD = reservedTLDs.some(tld => domain.endsWith(tld));
-
-      if (!emailRegex.test(contactValue) || isReservedDomain || isReservedTLD) {
-
-        let errorMsg = 'La dirección de correo electrónico no es correcta.';
-        if (isReservedDomain || isReservedTLD) {
-          errorMsg = 'Parece que estás usando un dominio de prueba. Por seguridad, requerimos una dirección de correo activa.';
-        }
-
-        setShowQuoteForm(false);
-        showAlert('error', 'Correo inválido', errorMsg);
-        return;
-      }
+    // Validar que al menos uno de los dos sea válido
+    if (!isEmailValid && !isPhoneValid) {
+      setShowQuoteForm(false);
+      showAlert(
+        'error',
+        'Contacto incompleto',
+        'Por favor, proporciona un correo electrónico o teléfono válido.'
+      );
+      return;
     }
 
-    // Caso 3: Validación de Teléfono (WhatsApp)
-    else {
-      const phoneRegex = /^\d{7,15}$/;
-      // Verifica si todos los números son iguales (ej: "9999999")
-      const isAllSameDigits = contactValue.split('').every(char => char === contactValue[0]);
-
-      if (!phoneRegex.test(contactValue) || isAllSameDigits) {
-        setShowQuoteForm(false);
-        showAlert(
-          'error',
-          'Teléfono inválido',
-          isAllSameDigits
-            ? 'El número no puede contener solo dígitos repetidos.'
-            : 'El número debe tener entre 7 y 15 dígitos numéricos.'
-        );
-        return;
-      }
+    // Caso 4: Validación de Ubicación
+    if (formData.city.trim().length < 2 && formData.department.trim().length < 2) {
+      setShowQuoteForm(false);
+      showAlert('error', 'Ubicación incompleta', 'Ingresa al menos ciudad o departamento para ubicar la instalación.');
+      return;
     }
+
+    const locationSummary = getLocationInputValue();
 
     // --- SI PASA TODAS LAS VALIDACIONES, SE EJECUTA EL ENVÍO ---
 
     const payload = {
       clientData: {
         name: formData.name,
-        contact: contactValue,
-        contactType: formData.contactType,
+        contact: formData.preferredContact === 'email' ? formData.email : formData.phone,
+        contactType: formData.preferredContact,
         segmento: consumption <= 3000 ? 'Hogar' : 'Empresa',
-        ciudad: '',
-        departamento: ''
+        ubicacion: locationSummary || formData.city,
+        ubicacion_maps: formData.location_maps,
+        departamento: formData.department
       },
       simulationResults: {
         monthlyConsumption: consumption,
@@ -219,28 +323,50 @@ export function SolarSimulator() {
     };
 
     try {
-      const response = await fetch(`${window.location.origin}/submit-to-google.php/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const quoteApiPayload = {
+        clientName: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        city: locationSummary || formData.city.trim() || formData.department.trim(),
+        department: formData.department.trim(),
+        location_maps: formData.location_maps || locationSummary,
+        monthlyConsumption: consumption,
+        estimatedInvestment: results.precio,
+        panelCount: results.paneles,
+        requiredArea: results.area,
+        peakPower: results.potenciaPico,
+        simulatorId: import.meta.env.VITE_SIMULATOR_ID || undefined,
+      };
 
-      const data = await response.json();
+      // Envío al cotizador (principal) y a Google Sheets en paralelo
+      const [success] = await Promise.all([
+        submitToQuoteApi(quoteApiPayload),
+        fetch(`${window.location.origin}/submit-to-google.php/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => null),
+      ]);
 
-      if (data.status === 'success') {
+      if (success) {
         setShowQuoteForm(false);
-        const successMsg = isEmail
+        const successMsg = formData.preferredContact === 'email'
           ? 'Tu propuesta llegará pronto a tu correo. ¡No olvides revisar tu bandeja!'
           : '¡Perfecto! Te enviaremos un mensaje por WhatsApp en breve.';
 
         showAlert('success', '¡Recibido!', successMsg);
 
         // Reinicia los campos de texto del formulario
-        setFormData({ name: '', contactType: 'whatsapp', whatsapp: '', email: '' });
+        setFormData({ name: '', email: '', phone: '', address: '', city: '', department: '', location_maps: '', preferredContact: 'whatsapp' });
 
-        // Reinicia el valor del simulador y su campo de texto a 150 (o tu valor inicial)
+        // Reinicia el valor del simulador y su campo de texto a 300
         setConsumption(300);
         setInputValue('300');
+
+        // Redirige al formulario de cotización tras 1 segundo
+        setTimeout(() => {
+          window.top ? window.top.location.href = 'https://adabtech.com/forms/quote' : window.location.href = 'https://adabtech.com/forms/quote';
+        }, 1000);
       } else {
         showAlert('error', 'Error de servidor', 'No pudimos procesar los datos. Intenta más tarde.');
       }
@@ -693,7 +819,7 @@ export function SolarSimulator() {
           <div className="relative inline-block">
             <button
               ref={ctaButtonRef}
-              onClick={() => setShowQuoteForm(true)}
+              onClick={() => { setShowQuoteForm(true); handleDetectLocation(); }}
               /* onClick={handleGoToForm} */
               onMouseEnter={() => setShowTooltip('ctaButton')}
               onMouseLeave={() => setShowTooltip(null)}
@@ -786,7 +912,7 @@ export function SolarSimulator() {
       {/* Quote Form Modal */}
       {showQuoteForm && (
         <div
-          className="fixed inset-0 flex items-center justify-center p-4 md:p-8"
+          className="fixed inset-0 flex items-start md:items-center justify-center p-3 md:p-8 overflow-y-auto"
           style={{
             background: 'rgba(0, 0, 0, 0.9)',
             zIndex: 9999,
@@ -795,12 +921,12 @@ export function SolarSimulator() {
           onClick={() => setShowQuoteForm(false)}
         >
           <div
-            className="relative w-full max-w-md"
+            className="relative w-full max-w-md my-4 md:my-0"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Form Container */}
             <div
-              className="rounded-2xl px-5 pb-6 pt-4 md:px-6 md:pb-8 md:pt-2"
+              className="quote-modal-scroll rounded-2xl px-4 pb-5 pt-3 md:px-6 md:pb-8 md:pt-2 max-h-[88vh] overflow-y-auto"
               style={{
                 background: 'rgba(30, 30, 30, 0.95)',
                 border: '2px solid rgba(244, 154, 43, 0.3)',
@@ -827,9 +953,9 @@ export function SolarSimulator() {
               </div>
 
               {/* Header */}
-              <div className="text-center mb-6">
+              <div className="text-center mb-5 md:mb-6">
                 <h3
-                  className="text-2xl md:text-3xl font-bold mb-2"
+                  className="text-xl md:text-3xl font-bold mb-2"
                   style={{ color: '#F49A2B', fontFamily: 'Manrope, sans-serif' }}
                 >
                   Solicita tu cotización
@@ -868,66 +994,63 @@ export function SolarSimulator() {
                   />
                 </div>
 
-                {/* Contact Type Toggle */}
+                {/* Preferencia de contacto */}
                 <div className="mb-4">
                   <label
                     className="block text-sm font-medium mb-2"
                     style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                   >
-                    Preferencia de contacto
+                    ¿Cómo prefieres que nos contactemos?
                   </label>
-                  <div className="flex flex-wrap gap-2 mb-3">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, contactType: 'email' })}
+                      onClick={() => setFormData({ ...formData, preferredContact: 'email' })}
                       className="flex-1 min-w-[140px] px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
-                        background: formData.contactType === 'email' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
-                        color: formData.contactType === 'email' ? '#000' : 'rgba(255, 255, 255, 0.7)',
-                        border: `1px solid ${formData.contactType === 'email' ? '#F49A2B' : 'rgba(244, 154, 43, 0.3)'}`,
+                        background: formData.preferredContact === 'email' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
+                        color: formData.preferredContact === 'email' ? '#000' : 'rgba(255, 255, 255, 0.7)',
+                        border: `1px solid ${formData.preferredContact === 'email' ? '#F49A2B' : 'rgba(244, 154, 43, 0.3)'}`,
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
                       <img src={emailIcon} alt="" className="w-5 h-5 flex-shrink-0"
-                        style={{ filter: formData.contactType === 'email' ? 'none' : 'brightness(0.8)' }} />
+                        style={{ filter: formData.preferredContact === 'email' ? 'none' : 'brightness(0.8)' }} />
                       <span>Email</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, contactType: 'whatsapp' })}
+                      onClick={() => setFormData({ ...formData, preferredContact: 'whatsapp' })}
                       className="flex-1 min-w-[140px] px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
-                        background: formData.contactType === 'whatsapp' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
-                        color: formData.contactType === 'whatsapp' ? '#000' : 'rgba(255, 255, 255, 0.7)',
-                        border: `1px solid ${formData.contactType === 'whatsapp' ? '#F49A2B' : 'rgba(244, 154, 43, 0.3)'}`,
+                        background: formData.preferredContact === 'whatsapp' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
+                        color: formData.preferredContact === 'whatsapp' ? '#000' : 'rgba(255, 255, 255, 0.7)',
+                        border: `1px solid ${formData.preferredContact === 'whatsapp' ? '#F49A2B' : 'rgba(244, 154, 43, 0.3)'}`,
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
                       <img src={whatsappIcon} alt="" className="w-5 h-5 flex-shrink-0"
-                        style={{ filter: formData.contactType === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
+                        style={{ filter: formData.preferredContact === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
                       <span>WhatsApp</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Contact Input con persistencia */}
+                {/* Email - solo visible si preferredContact es email */}
+                {formData.preferredContact === 'email' && (
                 <div className="mb-6">
                   <label
                     className="block text-sm font-medium mb-2"
                     style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                   >
-                    {formData.contactType === 'email' ? 'Correo electrónico' : 'Número de WhatsApp'}
+                    Correo electrónico
                   </label>
                   <input
-                    type={formData.contactType === 'email' ? 'email' : 'tel'}
+                    type="email"
                     required
-                    // Aquí conectamos con la llave específica del estado para que no se borre al cambiar
-                    value={formData.contactType === 'email' ? formData.email : formData.whatsapp}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      [formData.contactType]: e.target.value
-                    })}
-                    placeholder={formData.contactType === 'email' ? 'ejemplo@correo.com' : '300 123 4567'}
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="ejemplo@correo.com"
                     className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
                     style={{
                       background: 'rgba(50, 50, 50, 0.8)',
@@ -935,6 +1058,177 @@ export function SolarSimulator() {
                       fontFamily: 'Montserrat, sans-serif'
                     }}
                   />
+                </div>
+                )}
+
+                {/* Teléfono - solo visible si preferredContact es whatsapp */}
+                {formData.preferredContact === 'whatsapp' && (
+                <div className="mb-6">
+                  <label
+                    className="block text-sm font-medium mb-2"
+                    style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
+                  >
+                    Teléfono / WhatsApp
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="300 123 4567"
+                    className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
+                    style={{
+                      background: 'rgba(50, 50, 50, 0.8)',
+                      border: '1px solid rgba(244, 154, 43, 0.3)',
+                      fontFamily: 'Montserrat, sans-serif'
+                    }}
+                  />
+                </div>
+                )}
+
+                {/* Ubicación */}
+                <div className="mb-6">
+                  <label
+                    className="block text-sm font-medium mb-2"
+                    style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
+                  >
+                    Ubicación del lugar de instalación
+                  </label>
+
+                  {/* idle: dos opciones */}
+                  {locationMode === 'idle' && (
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={handleDetectLocation}
+                        className="w-full px-4 py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all hover:brightness-110"
+                        style={{
+                          background: 'rgba(244, 154, 43, 0.15)',
+                          border: '1px solid rgba(244, 154, 43, 0.4)',
+                          color: '#F49A2B',
+                          fontFamily: 'Montserrat, sans-serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <MapPin className="w-4 h-4 flex-shrink-0" />
+                        Detectar mi ubicación
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLocationMode('manual')}
+                        className="w-full text-center text-xs py-1 transition-all hover:underline"
+                        style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'Montserrat, sans-serif', background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        Ingresar manualmente
+                      </button>
+                    </div>
+                  )}
+
+                  {/* detecting: spinner */}
+                  {locationMode === 'detecting' && (
+                    <div
+                      className="w-full px-4 py-3 rounded-lg flex items-center gap-3"
+                      style={{ background: 'rgba(50,50,50,0.8)', border: '1px solid rgba(244,154,43,0.3)' }}
+                    >
+                      <Loader className="w-4 h-4 animate-spin flex-shrink-0" style={{ color: '#F49A2B' }} />
+                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontFamily: 'Montserrat, sans-serif' }}>
+                        Detectando ubicación…
+                      </span>
+                    </div>
+                  )}
+
+                  {/* detected: ubicación detectada y editable */}
+                  {locationMode === 'detected' && (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#34d399' }} />
+                          <span style={{ color: '#34d399', fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 600 }}>
+                            Ubicación detectada · puedes editarla
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={getLocationInputValue()}
+                            onChange={(e) => applyLocationInput(e.target.value)}
+                            placeholder="Dirección, Ciudad, Departamento"
+                            className="flex-1 px-4 py-3 rounded-lg text-white outline-none transition-all focus:ring-2"
+                            style={{
+                              background: 'rgba(50,50,50,0.8)',
+                              border: '1px solid rgba(52,211,153,0.4)',
+                              fontFamily: 'Montserrat, sans-serif',
+                              fontSize: 14,
+                            }}
+                          />
+                          {locationCoords && (
+                            <a
+                              href={`https://www.google.com/maps?q=${locationCoords.lat},${locationCoords.lon}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Ver en Google Maps"
+                              className="flex items-center justify-center px-3 rounded-lg transition-all hover:brightness-110 flex-shrink-0"
+                              style={{
+                                background: 'rgba(52,211,153,0.15)',
+                                border: '1px solid rgba(52,211,153,0.4)',
+                                color: '#34d399',
+                              }}
+                            >
+                              <MapPin className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setFormData(prev => ({ ...prev, address: '', city: '', department: '', location_maps: '' })); setLocationMode('manual'); }}
+                        className="w-full px-4 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:brightness-110"
+                        style={{
+                         background: 'rgba(244, 154, 43, 0.15)',
+                          border: '1px solid rgba(244, 154, 43, 0.4)',
+                          color: '#F49A2B',
+                          fontFamily: 'Montserrat, sans-serif',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <MapPin className="w-4 h-4 flex-shrink-0" />
+                        No estoy en el lugar de instalación
+                      </button>
+                    </div>
+                  )}
+
+                  {/* manual: input libre */}
+                  {locationMode === 'manual' && (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        type="text"
+                        required
+                        value={getLocationInputValue()}
+                        onChange={(e) => applyLocationInput(e.target.value)}
+                        placeholder="Dirección, Ciudad, Departamento"
+                        className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
+                        style={{
+                          background: 'rgba(50, 50, 50, 0.8)',
+                          border: '1px solid rgba(244, 154, 43, 0.3)',
+                          fontFamily: 'Montserrat, sans-serif'
+                        }}
+                      />
+                      <div className="flex items-center justify-between px-1">
+                        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, fontFamily: 'Montserrat, sans-serif' }}>
+                          Ejemplo: Calle 10 #20-30, Medellín, Antioquia
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleDetectLocation}
+                          className="text-xs flex items-center gap-1 hover:underline flex-shrink-0"
+                          style={{ color: 'rgba(244,154,43,0.7)', fontFamily: 'Montserrat, sans-serif', background: 'none', border: 'none', cursor: 'pointer' }}
+                        >
+                          <MapPin className="w-3 h-3" />
+                          Usar mi ubicación
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Summary */}
@@ -954,7 +1248,7 @@ export function SolarSimulator() {
 
                   <div className="flex flex-row items-center justify-center w-full border-t border-white/5 pt-3 px-2">
                     <div
-                      className="flex items-center text-[clamp(10px,3.2vw,14px)] font-bold whitespace-nowrap"
+                      className="flex flex-wrap items-center justify-center text-[clamp(10px,3.2vw,14px)] font-bold text-center"
                       style={{ color: '#F49A2B', fontFamily: 'Montserrat, sans-serif' }}
                     >
                       <span>{consumption} kWh/mes</span>
@@ -1017,6 +1311,30 @@ export function SolarSimulator() {
       )}
 
       <style>{`
+        .quote-modal-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(244, 154, 43, 0.75) rgba(255, 255, 255, 0.08);
+        }
+
+        .quote-modal-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .quote-modal-scroll::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.08);
+          border-radius: 9999px;
+        }
+
+        .quote-modal-scroll::-webkit-scrollbar-thumb {
+          background: linear-gradient(180deg, rgba(244, 154, 43, 0.95) 0%, rgba(224, 136, 32, 0.95) 100%);
+          border-radius: 9999px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .quote-modal-scroll::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(180deg, #ff9f1a 0%, #F49A2B 100%);
+        }
+
         .slider-custom::-webkit-slider-thumb {
           appearance: none;
           width: 24px;
