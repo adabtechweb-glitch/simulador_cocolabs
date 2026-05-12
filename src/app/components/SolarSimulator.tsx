@@ -23,13 +23,13 @@ export function SolarSimulator() {
   // Estado persistente del formulario
   const [formData, setFormData] = useState({
     name: '',
+    contactType: 'whatsapp' as 'whatsapp' | 'email',
+    whatsapp: '',
     email: '',
-    phone: '',
     address: '',
     city: '',
     department: '',
-    location_maps: '',
-    preferredContact: 'whatsapp' as 'whatsapp' | 'email'
+    location_maps: ''
   });
 
   // Estado del campo de ubicación
@@ -246,31 +246,48 @@ export function SolarSimulator() {
       return;
     }
 
-    // Caso 2 & 3: Validación de Email O Teléfono (al menos uno debe ser válido)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^\d{7,15}$/;
-    
-    const cleanPhone = formData.phone.replace(/\s/g, '');
-    const isAllSameDigits = cleanPhone.split('').every(char => char === cleanPhone[0]);
-    
-    const domain = formData.email.split('@')[1]?.toLowerCase() || "";
-    const reservedDomains = ['example.com', 'example.net', 'example.org'];
-    const reservedTLDs = ['.test', '.example', '.invalid', '.localhost'];
-    const isReservedDomain = reservedDomains.includes(domain);
-    const isReservedTLD = reservedTLDs.some(tld => domain.endsWith(tld));
-    
-    const isEmailValid = emailRegex.test(formData.email) && !isReservedDomain && !isReservedTLD;
-    const isPhoneValid = phoneRegex.test(cleanPhone) && !isAllSameDigits;
+    const isEmail = formData.contactType === 'email';
+    const contactValue = isEmail ? formData.email : formData.whatsapp;
 
-    // Validar que al menos uno de los dos sea válido
-    if (!isEmailValid && !isPhoneValid) {
-      setShowQuoteForm(false);
-      showAlert(
-        'error',
-        'Contacto incompleto',
-        'Por favor, proporciona un correo electrónico o teléfono válido.'
-      );
-      return;
+    // Caso 2: Validación de Email
+    if (isEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      const domain = contactValue.split('@')[1]?.toLowerCase() || "";
+      const reservedDomains = ['example.com', 'example.net', 'example.org'];
+      const reservedTLDs = ['.test', '.example', '.invalid', '.localhost'];
+
+      const isReservedDomain = reservedDomains.includes(domain);
+      const isReservedTLD = reservedTLDs.some(tld => domain.endsWith(tld));
+
+      if (!emailRegex.test(contactValue) || isReservedDomain || isReservedTLD) {
+        let errorMsg = 'La dirección de correo electrónico no es correcta.';
+        if (isReservedDomain || isReservedTLD) {
+          errorMsg = 'Parece que estás usando un dominio de prueba. Por seguridad, requerimos una dirección de correo activa.';
+        }
+
+        setShowQuoteForm(false);
+        showAlert('error', 'Correo inválido', errorMsg);
+        return;
+      }
+    }
+
+    // Caso 3: Validación de Teléfono (WhatsApp)
+    else {
+      const phoneRegex = /^\d{7,15}$/;
+      const isAllSameDigits = contactValue.split('').every(char => char === contactValue[0]);
+
+      if (!phoneRegex.test(contactValue) || isAllSameDigits) {
+        setShowQuoteForm(false);
+        showAlert(
+          'error',
+          'Teléfono inválido',
+          isAllSameDigits
+            ? 'El número no puede contener solo dígitos repetidos.'
+            : 'El número debe tener entre 7 y 15 dígitos numéricos.'
+        );
+        return;
+      }
     }
 
     // Caso 4: Validación de Ubicación
@@ -287,18 +304,19 @@ export function SolarSimulator() {
     }
 
     const locationSummary = locationMode === 'manual' ? formData.address : getLocationInputValue();
+    const cityValue = formData.city.trim() || locationSummary.trim();
+    const departmentValue = formData.department.trim();
 
     // --- SI PASA TODAS LAS VALIDACIONES, SE EJECUTA EL ENVÍO ---
 
     const payload = {
       clientData: {
         name: formData.name,
-        contact: formData.preferredContact === 'email' ? formData.email : formData.phone,
-        contactType: formData.preferredContact,
+        contact: contactValue,
+        contactType: formData.contactType,
         segmento: consumption <= 3000 ? 'Hogar' : 'Empresa',
-        ubicacion: locationSummary || formData.city,
-        ubicacion_maps: formData.location_maps,
-        departamento: formData.department
+        ciudad: cityValue,
+        departamento: departmentValue
       },
       simulationResults: {
         monthlyConsumption: consumption,
@@ -314,9 +332,9 @@ export function SolarSimulator() {
       const quoteApiPayload = {
         clientName: formData.name,
         email: formData.email,
-        phone: formData.phone,
-        city: locationSummary || formData.city.trim() || formData.department.trim(),
-        department: formData.department.trim(),
+        phone: formData.whatsapp,
+        city: cityValue,
+        department: departmentValue,
         location_maps: formData.location_maps || locationSummary,
         monthlyConsumption: consumption,
         estimatedInvestment: results.precio,
@@ -326,35 +344,46 @@ export function SolarSimulator() {
         simulatorId: import.meta.env.VITE_SIMULATOR_ID || undefined,
       };
 
-      // Envío al cotizador (principal) y a Google Sheets en paralelo
-      const [success] = await Promise.all([
-        submitToQuoteApi(quoteApiPayload),
+      // Envío a Google Forms (principal) y al cotizador en paralelo
+      const [phpResult] = await Promise.all([
         fetch(`${window.location.origin}/submit-to-google.php/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-        }).catch(() => null),
+        }).then(r => r.json()).catch(() => null),
+        submitToQuoteApi(quoteApiPayload).catch(() => null),
       ]);
+
+      const success = phpResult?.status === 'success';
 
       if (success) {
         setShowQuoteForm(false);
-        const successMsg = formData.preferredContact === 'email'
+        const successMsg = isEmail
           ? 'Tu propuesta llegará pronto a tu correo. ¡No olvides revisar tu bandeja!'
           : '¡Perfecto! Te enviaremos un mensaje por WhatsApp en breve.';
 
         showAlert('success', '¡Recibido!', successMsg);
 
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         // Reinicia los campos de texto del formulario
-        setFormData({ name: '', email: '', phone: '', address: '', city: '', department: '', location_maps: '', preferredContact: 'whatsapp' });
+        setFormData({
+          name: '',
+          contactType: 'whatsapp',
+          whatsapp: '',
+          email: '',
+          address: '',
+          city: '',
+          department: '',
+          location_maps: ''
+        });
 
         // Reinicia el valor del simulador y su campo de texto a 300
         setConsumption(300);
         setInputValue('300');
 
-        // Redirige al formulario de cotización tras 1 segundo
-        setTimeout(() => {
-          window.top ? window.top.location.href = 'https://adabtech.com/forms/quote' : window.location.href = 'https://adabtech.com/forms/quote';
-        }, 1000);
+        // Redirige al formulario de cotización una vez ambas llamadas terminaron y el usuario leyó el mensaje
+        window.top ? window.top.location.href = 'https://adabtech.com/forms/quote' : window.location.href = 'https://adabtech.com/forms/quote';
       } else {
         showAlert('error', 'Error de servidor', 'No pudimos procesar los datos. Intenta más tarde.');
       }
@@ -993,39 +1022,39 @@ export function SolarSimulator() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, preferredContact: 'email' })}
+                      onClick={() => setFormData({ ...formData, contactType: 'email' })}
                       className="flex-1 min-w-35 px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
-                        background: formData.preferredContact === 'email' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
-                        color: formData.preferredContact === 'email' ? '#000' : 'rgba(255, 255, 255, 0.7)',
-                        border: `1px solid ${formData.preferredContact === 'email' ? '#F49A2B' : 'rgba(244, 154, 43, 0.3)'}`,
+                        background: formData.contactType === 'email' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
+                        color: formData.contactType === 'email' ? '#000' : 'rgba(255, 255, 255, 0.7)',
+                        border: `1px solid ${formData.contactType === 'email' ? '#F49A2B' : 'rgba(244, 154, 43, 0.3)'}`,
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
                       <img src={emailIcon} alt="" className="w-5 h-5 shrink-0"
-                        style={{ filter: formData.preferredContact === 'email' ? 'none' : 'brightness(0.8)' }} />
+                        style={{ filter: formData.contactType === 'email' ? 'none' : 'brightness(0.8)' }} />
                       <span>Email</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, preferredContact: 'whatsapp' })}
+                      onClick={() => setFormData({ ...formData, contactType: 'whatsapp' })}
                       className="flex-1 min-w-35 px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
-                        background: formData.preferredContact === 'whatsapp' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
-                        color: formData.preferredContact === 'whatsapp' ? '#000' : 'rgba(255, 255, 255, 0.7)',
-                        border: `1px solid ${formData.preferredContact === 'whatsapp' ? '#F49A2B' : 'rgba(244, 154, 43, 0.3)'}`,
+                        background: formData.contactType === 'whatsapp' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
+                        color: formData.contactType === 'whatsapp' ? '#000' : 'rgba(255, 255, 255, 0.7)',
+                        border: `1px solid ${formData.contactType === 'whatsapp' ? '#F49A2B' : 'rgba(244, 154, 43, 0.3)'}`,
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
                       <img src={whatsappIcon} alt="" className="w-5 h-5 shrink-0"
-                        style={{ filter: formData.preferredContact === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
+                        style={{ filter: formData.contactType === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
                       <span>WhatsApp</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Email - solo visible si preferredContact es email */}
-                {formData.preferredContact === 'email' && (
+                {/* Email - solo visible si contactType es email */}
+                {formData.contactType === 'email' && (
                 <div className="mb-6">
                   <label
                     className="block text-sm font-medium mb-2"
@@ -1049,20 +1078,20 @@ export function SolarSimulator() {
                 </div>
                 )}
 
-                {/* Teléfono - solo visible si preferredContact es whatsapp */}
-                {formData.preferredContact === 'whatsapp' && (
+                {/* Teléfono - solo visible si contactType es whatsapp */}
+                {formData.contactType === 'whatsapp' && (
                 <div className="mb-6">
                   <label
                     className="block text-sm font-medium mb-2"
                     style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
                   >
-                    Teléfono / WhatsApp
+                    WhatsApp
                   </label>
                   <input
                     type="tel"
                     required
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    value={formData.whatsapp}
+                    onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                     placeholder="300 123 4567"
                     className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
                     style={{
