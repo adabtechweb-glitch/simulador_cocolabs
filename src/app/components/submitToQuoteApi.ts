@@ -16,10 +16,11 @@ interface QuotePayload {
 
 export async function submitToQuoteApi(payload: QuotePayload): Promise<boolean> {
   try {
-    const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+    const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+    const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
     const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
     
-    const response = await fetch(`${apiUrl}/api/quotations/from-simulator/`, {
+    const response = await fetch(`${apiBase}/quotations/from-simulator/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

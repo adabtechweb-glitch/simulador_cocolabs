@@ -216,27 +216,9 @@ export function SolarSimulator() {
   };
 
   const applyLocationInput = (value: string) => {
-    const normalized = value.trim();
-    const parts = normalized.split(',').map((part) => part.trim()).filter(Boolean);
-
-    if (parts.length >= 3) {
-      const department = sanitizeLocationToken(parts[parts.length - 1]);
-      const city = sanitizeLocationToken(parts[parts.length - 2]);
-      const address = parts.slice(0, -2).join(', ');
-      setFormData({ ...formData, address, city, department });
-      return;
-    }
-
-    if (parts.length === 2) {
-      const [cityRaw, departmentRaw] = parts;
-      const city = sanitizeLocationToken(cityRaw);
-      const department = sanitizeLocationToken(departmentRaw);
-      setFormData({ ...formData, address: '', city, department });
-      return;
-    }
-
-    const singleToken = sanitizeLocationToken(normalized);
-    setFormData({ ...formData, address: normalized, city: singleToken, department: '' });
+    // En modo manual, guardar la dirección tal como está sin procesamiento
+    // Dejar que el backend se encargue de extraer la ciudad
+    setFormData({ ...formData, address: value, city: '', department: '' });
   };
 
   // --- HANDLERS DEL FORMULARIO ---
@@ -292,13 +274,19 @@ export function SolarSimulator() {
     }
 
     // Caso 4: Validación de Ubicación
-    if (formData.city.trim().length < 2 && formData.department.trim().length < 2) {
+    // En modo manual, solo necesitamos que haya algo en address
+    // En modo detectado, necesitamos city o department
+    const hasLocationData = locationMode === 'manual' 
+      ? formData.address.trim().length > 2
+      : formData.city.trim().length >= 2 || formData.department.trim().length >= 2;
+    
+    if (!hasLocationData) {
       setShowQuoteForm(false);
-      showAlert('error', 'Ubicación incompleta', 'Ingresa al menos ciudad o departamento para ubicar la instalación.');
+      showAlert('error', 'Ubicación incompleta', 'Ingresa una dirección válida para ubicar la instalación.');
       return;
     }
 
-    const locationSummary = getLocationInputValue();
+    const locationSummary = locationMode === 'manual' ? formData.address : getLocationInputValue();
 
     // --- SI PASA TODAS LAS VALIDACIONES, SE EJECUTA EL ENVÍO ---
 
@@ -429,7 +417,7 @@ export function SolarSimulator() {
       {/* Atmospheric background */}
       <div className="absolute inset-0 opacity-20">
         <div
-          className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full blur-3xl"
+          className="absolute top-0 right-0 w-200 h-200 rounded-full blur-3xl"
           style={{ background: 'radial-gradient(circle, rgba(26, 184, 215, 0.25) 0%, transparent 70%)' }}
         ></div>
       </div>
@@ -496,7 +484,7 @@ export function SolarSimulator() {
               >
                 ¿Cuánta energía consumes al mes?
               </p>
-              <div className="relative flex-shrink-0">
+              <div className="relative shrink-0">
                 <button
                   onClick={() => setShowModal(true)}
                   onMouseEnter={() => setShowTooltip('question')}
@@ -549,7 +537,7 @@ export function SolarSimulator() {
               >
                 <div className="flex items-center justify-center gap-2 sm:gap-4 flex-nowrap">
                   {/* Decrement Button */}
-                  <div className="relative flex-shrink-0">
+                  <div className="relative shrink-0">
                     <button
                       onClick={handleDecrement}
                       onMouseEnter={() => setShowTooltip('decrement')}
@@ -596,7 +584,7 @@ export function SolarSimulator() {
                   </div>
 
                   {/* Increment Button */}
-                  <div className="relative flex-shrink-0">
+                  <div className="relative shrink-0">
                     <button
                       onClick={handleIncrement}
                       onMouseEnter={() => setShowTooltip('increment')}
@@ -707,7 +695,7 @@ export function SolarSimulator() {
           >
             <div className="relative z-10 flex items-start gap-4">
               <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={estimatedInvestmentIcon} alt="Inversión" className="w-6 h-6" />
@@ -746,7 +734,7 @@ export function SolarSimulator() {
           >
             <div className="relative z-10 flex items-start gap-4">
               <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={monthlySavingsIcon} alt="Ahorro" className="w-6 h-6" />
@@ -785,7 +773,7 @@ export function SolarSimulator() {
           >
             <div className="relative z-10 flex items-start gap-4">
               <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={solarPanelsIcon} alt="Paneles" className="w-6 h-6" />
@@ -1006,7 +994,7 @@ export function SolarSimulator() {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, preferredContact: 'email' })}
-                      className="flex-1 min-w-[140px] px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                      className="flex-1 min-w-35 px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
                         background: formData.preferredContact === 'email' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
                         color: formData.preferredContact === 'email' ? '#000' : 'rgba(255, 255, 255, 0.7)',
@@ -1014,14 +1002,14 @@ export function SolarSimulator() {
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      <img src={emailIcon} alt="" className="w-5 h-5 flex-shrink-0"
+                      <img src={emailIcon} alt="" className="w-5 h-5 shrink-0"
                         style={{ filter: formData.preferredContact === 'email' ? 'none' : 'brightness(0.8)' }} />
                       <span>Email</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, preferredContact: 'whatsapp' })}
-                      className="flex-1 min-w-[140px] px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                      className="flex-1 min-w-35 px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
                         background: formData.preferredContact === 'whatsapp' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
                         color: formData.preferredContact === 'whatsapp' ? '#000' : 'rgba(255, 255, 255, 0.7)',
@@ -1029,7 +1017,7 @@ export function SolarSimulator() {
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      <img src={whatsappIcon} alt="" className="w-5 h-5 flex-shrink-0"
+                      <img src={whatsappIcon} alt="" className="w-5 h-5 shrink-0"
                         style={{ filter: formData.preferredContact === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
                       <span>WhatsApp</span>
                     </button>
@@ -1110,7 +1098,7 @@ export function SolarSimulator() {
                           cursor: 'pointer',
                         }}
                       >
-                        <MapPin className="w-4 h-4 flex-shrink-0" />
+                        <MapPin className="w-4 h-4 shrink-0" />
                         Detectar mi ubicación
                       </button>
                       <button
@@ -1130,7 +1118,7 @@ export function SolarSimulator() {
                       className="w-full px-4 py-3 rounded-lg flex items-center gap-3"
                       style={{ background: 'rgba(50,50,50,0.8)', border: '1px solid rgba(244,154,43,0.3)' }}
                     >
-                      <Loader className="w-4 h-4 animate-spin flex-shrink-0" style={{ color: '#F49A2B' }} />
+                      <Loader className="w-4 h-4 animate-spin shrink-0" style={{ color: '#F49A2B' }} />
                       <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontFamily: 'Montserrat, sans-serif' }}>
                         Detectando ubicación…
                       </span>
@@ -1142,7 +1130,7 @@ export function SolarSimulator() {
                     <div className="flex flex-col gap-3">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#34d399' }} />
+                          <CheckCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#34d399' }} />
                           <span style={{ color: '#34d399', fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 600 }}>
                             Ubicación detectada · puedes editarla
                           </span>
@@ -1167,7 +1155,7 @@ export function SolarSimulator() {
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Ver en Google Maps"
-                              className="flex items-center justify-center px-3 rounded-lg transition-all hover:brightness-110 flex-shrink-0"
+                              className="flex items-center justify-center px-3 rounded-lg transition-all hover:brightness-110 shrink-0"
                               style={{
                                 background: 'rgba(52,211,153,0.15)',
                                 border: '1px solid rgba(52,211,153,0.4)',
@@ -1191,7 +1179,7 @@ export function SolarSimulator() {
                           cursor: 'pointer',
                         }}
                       >
-                        <MapPin className="w-4 h-4 flex-shrink-0" />
+                        <MapPin className="w-4 h-4 shrink-0" />
                         No estoy en el lugar de instalación
                       </button>
                     </div>
@@ -1203,7 +1191,7 @@ export function SolarSimulator() {
                       <input
                         type="text"
                         required
-                        value={getLocationInputValue()}
+                        value={formData.address}
                         onChange={(e) => applyLocationInput(e.target.value)}
                         placeholder="Dirección, Ciudad, Departamento"
                         className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
@@ -1220,7 +1208,7 @@ export function SolarSimulator() {
                         <button
                           type="button"
                           onClick={handleDetectLocation}
-                          className="text-xs flex items-center gap-1 hover:underline flex-shrink-0"
+                          className="text-xs flex items-center gap-1 hover:underline shrink-0"
                           style={{ color: 'rgba(244,154,43,0.7)', fontFamily: 'Montserrat, sans-serif', background: 'none', border: 'none', cursor: 'pointer' }}
                         >
                           <MapPin className="w-3 h-3" />
