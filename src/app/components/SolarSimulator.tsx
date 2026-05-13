@@ -341,7 +341,7 @@ export function SolarSimulator() {
         panelCount: results.paneles,
         requiredArea: results.area,
         peakPower: results.potenciaPico,
-        simulatorId: import.meta.env.VITE_SIMULATOR_ID || undefined,
+        simulatorId: 'cc7110e6-0e5d-443e-858d-b4a77db9246b',
       };
 
       // Envío a Google Forms (principal) y al cotizador en paralelo
