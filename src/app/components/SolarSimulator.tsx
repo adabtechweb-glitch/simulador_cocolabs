@@ -19,6 +19,7 @@ export function SolarSimulator() {
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [tarifaEnergia, setTarifaEnergia] = useState(900);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Estado persistente del formulario
   const [formData, setFormData] = useState({
@@ -308,6 +309,7 @@ export function SolarSimulator() {
     const departmentValue = formData.department.trim();
 
     // --- SI PASA TODAS LAS VALIDACIONES, SE EJECUTA EL ENVÍO ---
+    setIsSubmitting(true);
 
     const payload = {
       clientData: {
@@ -389,6 +391,8 @@ export function SolarSimulator() {
       }
     } catch (error) {
       showAlert('error', 'Error de conexión', 'No hubo respuesta del servidor.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1280,7 +1284,8 @@ export function SolarSimulator() {
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  className="w-full py-3.5 rounded-lg font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 rounded-lg font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
                   style={{
                     background: '#F49A2B',
                     color: '#000',
@@ -1288,7 +1293,10 @@ export function SolarSimulator() {
                     boxShadow: '0 4px 12px rgba(244, 154, 43, 0.4)'
                   }}
                 >
-                  Enviar solicitud
+                  <div className="flex items-center justify-center gap-2">
+                    {isSubmitting && <Loader className="w-5 h-5 animate-spin" />}
+                    <span>{isSubmitting ? 'Procesando solicitud...' : 'Enviar solicitud'}</span>
+                  </div>
                 </button>
 
                 <p
