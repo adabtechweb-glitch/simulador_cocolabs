@@ -317,7 +317,7 @@ export function SolarSimulator() {
         contact: contactValue,
         contactType: formData.contactType,
         segmento: consumption <= 3000 ? 'Hogar' : 'Empresa',
-        ciudad: cityValue,
+        ciudad: locationSummary.trim() || cityValue,
         departamento: departmentValue
       },
       simulationResults: {
