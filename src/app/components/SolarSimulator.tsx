@@ -36,6 +36,8 @@ export function SolarSimulator() {
   // Estado del campo de ubicación
   const [locationMode, setLocationMode] = useState<'idle' | 'detecting' | 'detected' | 'manual'>('idle');
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [regionSuggestions, setRegionSuggestions] = useState<Array<{ region_id: number; region_name: string; display: string }>>([]);
+  const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
 
   // --- REFERENCIAS (REFS) ---
   // Se agregan todas las que pide tu JSX para evitar errores de "Cannot find name"
@@ -217,9 +219,30 @@ export function SolarSimulator() {
   };
 
   const applyLocationInput = (value: string) => {
-    // En modo manual, guardar la dirección tal como está sin procesamiento
-    // Dejar que el backend se encargue de extraer la ciudad
     setFormData({ ...formData, address: value, city: '', department: '' });
+    setRegionSuggestions([]);
+    setSelectedRegionId(null);
+  };
+
+  const detectRegionForSimulator = async (city: string) => {
+    if (!city.trim()) return;
+    try {
+      const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+      const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
+      const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
+      const res = await fetch(`${apiBase}/quotations/simulator-detect-region/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Simulator-Key': apiKey },
+        body: JSON.stringify({ city }),
+      });
+      const data = await res.json();
+      if (data.matched_by === 'ambiguous' && data.suggestions?.length) {
+        setRegionSuggestions(data.suggestions);
+      } else {
+        setRegionSuggestions([]);
+        if (data.region?.id) setSelectedRegionId(data.region.id);
+      }
+    } catch {}
   };
 
   // --- HANDLERS DEL FORMULARIO ---
@@ -338,6 +361,7 @@ export function SolarSimulator() {
         city: cityValue,
         department: departmentValue,
         location_maps: formData.location_maps || locationSummary,
+        regionId: selectedRegionId ?? undefined,
         monthlyConsumption: consumption,
         estimatedInvestment: results.precio,
         panelCount: results.paneles,
@@ -379,6 +403,8 @@ export function SolarSimulator() {
           department: '',
           location_maps: ''
         });
+        setRegionSuggestions([]);
+        setSelectedRegionId(null);
 
         // Reinicia el valor del simulador y su campo de texto a 300
         setConsumption(300);
@@ -1226,6 +1252,7 @@ export function SolarSimulator() {
                         required
                         value={formData.address}
                         onChange={(e) => applyLocationInput(e.target.value)}
+                        onBlur={(e) => detectRegionForSimulator(e.target.value)}
                         placeholder="Dirección, Ciudad, Departamento"
                         className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
                         style={{
@@ -1248,6 +1275,29 @@ export function SolarSimulator() {
                           Usar mi ubicación
                         </button>
                       </div>
+                      {regionSuggestions.length > 0 && (
+                        <div style={{ background: 'rgba(244,154,43,0.08)', border: '1px solid rgba(244,154,43,0.3)', borderRadius: 8, padding: '10px 12px' }}>
+                          <p style={{ color: 'rgba(244,154,43,0.9)', fontSize: 12, fontFamily: 'Montserrat, sans-serif', marginBottom: 8, fontWeight: 600 }}>
+                            Este municipio existe en varias regiones. Selecciona la correcta:
+                          </p>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {regionSuggestions.map((s) => (
+                              <button
+                                key={s.region_id}
+                                type="button"
+                                onClick={() => { setSelectedRegionId(s.region_id); setRegionSuggestions([]); }}
+                                style={{
+                                  background: 'rgba(244,154,43,0.15)', border: '1px solid rgba(244,154,43,0.4)',
+                                  borderRadius: 4, padding: '4px 10px', fontSize: 12, color: '#fff',
+                                  cursor: 'pointer', fontFamily: 'Montserrat, sans-serif',
+                                }}
+                              >
+                                {s.display} → {s.region_name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
