@@ -358,7 +358,7 @@ export function SolarSimulator() {
         clientName: formData.name,
         email: formData.email,
         phone: formData.whatsapp,
-        city: cityValue,
+        city: locationSummary.trim() || cityValue,
         department: departmentValue,
         location_maps: formData.location_maps || locationSummary,
         regionId: selectedRegionId ?? undefined,
