@@ -1,10 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Zap, TrendingUp, Grid3x3, ArrowRight } from 'lucide-react';
-import { useEffect } from 'react';
 import { initMicrointeractions, cleanupMicrointeractions } from './microinteractions.js';
 
 export function SolarQuotationModule() {
   const [consumption, setConsumption] = useState(521);
+  const [panelPowerW, setPanelPowerW] = useState(620);
+  const [areaPerPanelM2, setAreaPerPanelM2] = useState(3.3);
+  const [hsp, setHsp] = useState(3.5);
+
+  useEffect(() => {
+    const fetchSimulatorConfig = async () => {
+      try {
+        const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+        const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
+        const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
+        const simulatorId = import.meta.env.VITE_SIMULATOR_ID || 'cc7110e6-0e5d-443e-858d-b4a77db9246b';
+        const res = await fetch(`${apiBase}/quotations/simulator-config/${simulatorId}/`, {
+          headers: { 'X-Simulator-Key': apiKey },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.panelPowerW) setPanelPowerW(data.panelPowerW);
+          if (data.areaPerPanelM2) setAreaPerPanelM2(data.areaPerPanelM2);
+          if (data.sunHoursPerDay) setHsp(data.sunHoursPerDay);
+        }
+      } catch {}
+    };
+    fetchSimulatorConfig();
+  }, []);
 
   // Initialize microinteractions after component mounts
   useEffect(() => {
@@ -22,9 +45,9 @@ export function SolarQuotationModule() {
   // Calculation logic
   const calculateResults = (kwh: number) => {
     const kwhPrice = 650;
-    const systemPowerKwp = (kwh / 120).toFixed(2);
-    const panelCount = Math.ceil(parseFloat(systemPowerKwp) / 0.45);
-    const requiredArea = panelCount * 2;
+    const systemPowerKwp = ((kwh / 30) / hsp).toFixed(2);
+    const panelCount = Math.ceil((parseFloat(systemPowerKwp) * 1000) / panelPowerW);
+    const requiredArea = Math.round(panelCount * areaPerPanelM2 * 100) / 100;
     const investment = Math.round(parseFloat(systemPowerKwp) * 3500000);
     const monthlySavings = Math.round(kwh * kwhPrice * 0.85);
     

@@ -38,6 +38,9 @@ export function SolarSimulator() {
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [regionSuggestions, setRegionSuggestions] = useState<Array<{ region_id: number; region_name: string; display: string }>>([]);
   const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
+  const [regionHsp, setRegionHsp] = useState<number>(3.5);
+  const [panelPowerW, setPanelPowerW] = useState<number>(620);
+  const [areaPerPanelM2, setAreaPerPanelM2] = useState<number>(3.3);
 
   // --- REFERENCIAS (REFS) ---
   // Se agregan todas las que pide tu JSX para evitar errores de "Cannot find name"
@@ -65,9 +68,9 @@ export function SolarSimulator() {
     // Forzamos que el cálculo use al menos 300 aunque el estado diga menos
     const consumoValidado = Math.max(300, consumo);
 
-    const potenciaPico = (consumoValidado / 30) / CONSTANTS.HORAS_EFECTIVAS;
-    const paneles = Math.floor((potenciaPico * 1000) / CONSTANTS.POTENCIA_PANEL_W);
-    const area = Math.floor(paneles * CONSTANTS.AREA_POR_PANEL_M2);
+    const potenciaPico = (consumoValidado / 30) / regionHsp;
+    const paneles = Math.ceil((potenciaPico * 1000) / panelPowerW);
+    const area = Math.round(paneles * areaPerPanelM2 * 100) / 100;
     const precioBase = CONSTANTS.INTERCEPTO + (CONSTANTS.PENDIENTE * consumoValidado);
     const factor = consumoValidado <= 3000 ? CONSTANTS.FACTOR_RETAIL : CONSTANTS.FACTOR_INDUSTRIAL;
 
@@ -240,7 +243,10 @@ export function SolarSimulator() {
         setRegionSuggestions(data.suggestions);
       } else {
         setRegionSuggestions([]);
-        if (data.region?.id) setSelectedRegionId(data.region.id);
+        if (data.region?.id) {
+          setSelectedRegionId(data.region.id);
+          if (data.region.hsp_avg) setRegionHsp(data.region.hsp_avg);
+        }
       }
     } catch {}
   };
@@ -459,6 +465,27 @@ export function SolarSimulator() {
     };
 
     fetchTarifa();
+  }, []);
+
+  useEffect(() => {
+    const fetchSimulatorConfig = async () => {
+      try {
+        const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+        const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
+        const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
+        const simulatorId = import.meta.env.VITE_SIMULATOR_ID || 'cc7110e6-0e5d-443e-858d-b4a77db9246b';
+        const res = await fetch(`${apiBase}/quotations/simulator-config/${simulatorId}/`, {
+          headers: { 'X-Simulator-Key': apiKey },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.panelPowerW) setPanelPowerW(data.panelPowerW);
+          if (data.areaPerPanelM2) setAreaPerPanelM2(data.areaPerPanelM2);
+          if (data.sunHoursPerDay) setRegionHsp(data.sunHoursPerDay);
+        }
+      } catch {}
+    };
+    fetchSimulatorConfig();
   }, []);
 
   // --- HELPERS ---
