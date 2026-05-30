@@ -36,7 +36,7 @@ export function SolarSimulator() {
   // Estado del campo de ubicación
   const [locationMode, setLocationMode] = useState<'idle' | 'detecting' | 'detected' | 'manual'>('idle');
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
-  const [regionSuggestions, setRegionSuggestions] = useState<Array<{ region_id: number; region_name: string; display: string }>>([]);
+  const [regionSuggestions, setRegionSuggestions] = useState<Array<{ region_id: number; region_name: string; display: string; hsp_avg?: number; tariff_cop_per_kwh?: number }>>([]);
   const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
   const [regionHsp, setRegionHsp] = useState<number>(3.5);
   const [panelPowerW, setPanelPowerW] = useState<number>(620);
@@ -206,6 +206,7 @@ export function SolarSimulator() {
           location_maps: mapsUrl,
         }));
         setLocationMode('detected');
+        if (locationData.city) detectRegionForSimulator(locationData.city);
       },
       () => {
         setLocationMode('manual');
@@ -233,10 +234,11 @@ export function SolarSimulator() {
       const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
       const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
       const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
+      const simulatorId = import.meta.env.VITE_SIMULATOR_ID || 'cc7110e6-0e5d-443e-858d-b4a77db9246b';
       const res = await fetch(`${apiBase}/quotations/simulator-detect-region/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Simulator-Key': apiKey },
-        body: JSON.stringify({ city }),
+        body: JSON.stringify({ city, simulatorId }),
       });
       const data = await res.json();
       if (data.matched_by === 'ambiguous' && data.suggestions?.length) {
@@ -246,6 +248,7 @@ export function SolarSimulator() {
         if (data.region?.id) {
           setSelectedRegionId(data.region.id);
           if (data.region.hsp_avg) setRegionHsp(data.region.hsp_avg);
+          if (data.region.tariff_cop_per_kwh) setTarifaEnergia(data.region.tariff_cop_per_kwh);
         }
       }
     } catch {}
@@ -1312,7 +1315,12 @@ export function SolarSimulator() {
                               <button
                                 key={s.region_id}
                                 type="button"
-                                onClick={() => { setSelectedRegionId(s.region_id); setRegionSuggestions([]); }}
+                                onClick={() => {
+                                  setSelectedRegionId(s.region_id);
+                                  setRegionSuggestions([]);
+                                  if (s.hsp_avg) setRegionHsp(s.hsp_avg);
+                                  if (s.tariff_cop_per_kwh) setTarifaEnergia(s.tariff_cop_per_kwh);
+                                }}
                                 style={{
                                   background: 'rgba(244,154,43,0.15)', border: '1px solid rgba(244,154,43,0.4)',
                                   borderRadius: 4, padding: '4px 10px', fontSize: 12, color: '#fff',
