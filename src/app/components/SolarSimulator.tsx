@@ -42,6 +42,23 @@ export function SolarSimulator() {
   const [panelPowerW, setPanelPowerW] = useState<number>(620);
   const [areaPerPanelM2, setAreaPerPanelM2] = useState<number>(3.3);
 
+  // Estado autocomplete de ciudad
+  type CitySuggestion = { municipality: string; department: string; region_id: number; region_name: string };
+  const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
+  const cityDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cityInputRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (cityInputRef.current && !cityInputRef.current.contains(e.target as Node)) {
+        setShowCitySuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // --- REFERENCIAS (REFS) ---
   // Se agregan todas las que pide tu JSX para evitar errores de "Cannot find name"
   const sliderRef = useRef<HTMLInputElement>(null);
@@ -226,6 +243,42 @@ export function SolarSimulator() {
     setFormData({ ...formData, address: value, city: '', department: '' });
     setRegionSuggestions([]);
     setSelectedRegionId(null);
+  };
+
+  const handleManualCityChange = (value: string) => {
+    applyLocationInput(value);
+    if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+    if (value.trim().length < 2) {
+      setCitySuggestions([]);
+      setShowCitySuggestions(false);
+      return;
+    }
+    cityDebounceRef.current = setTimeout(async () => {
+      try {
+        const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+        const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
+        const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
+        const res = await fetch(
+          `${apiBase}/quotations/simulator-municipalities/?q=${encodeURIComponent(value.trim())}`,
+          { headers: { 'X-Simulator-Key': apiKey } }
+        );
+        if (!res.ok) return;
+        const data: CitySuggestion[] = await res.json();
+        setCitySuggestions(data);
+        setShowCitySuggestions(data.length > 0);
+      } catch {
+        setCitySuggestions([]);
+      }
+    }, 280);
+  };
+
+  const handleCitySelect = (s: CitySuggestion) => {
+    const address = s.department ? `${s.municipality}, ${s.department}` : s.municipality;
+    setFormData(prev => ({ ...prev, address, city: s.municipality, department: s.department }));
+    setShowCitySuggestions(false);
+    setCitySuggestions([]);
+    setRegionSuggestions([]);
+    detectRegionForSimulator(s.municipality);
   };
 
   const detectRegionForSimulator = async (city: string) => {
@@ -1277,23 +1330,61 @@ export function SolarSimulator() {
                   {/* manual: input libre */}
                   {locationMode === 'manual' && (
                     <div className="flex flex-col gap-2">
-                      <input
-                        type="text"
-                        required
-                        value={formData.address}
-                        onChange={(e) => applyLocationInput(e.target.value)}
-                        onBlur={(e) => detectRegionForSimulator(e.target.value)}
-                        placeholder="Dirección, Ciudad, Departamento"
-                        className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
-                        style={{
-                          background: 'rgba(50, 50, 50, 0.8)',
-                          border: '1px solid rgba(244, 154, 43, 0.3)',
-                          fontFamily: 'Montserrat, sans-serif'
-                        }}
-                      />
+                      <div ref={cityInputRef} style={{ position: 'relative' }}>
+                        <input
+                          type="text"
+                          required
+                          value={formData.address}
+                          onChange={(e) => handleManualCityChange(e.target.value)}
+                          onFocus={() => { if (citySuggestions.length > 0) setShowCitySuggestions(true); }}
+                          onBlur={(e) => { if (!showCitySuggestions) detectRegionForSimulator(e.target.value); }}
+                          placeholder="Ciudad o municipio"
+                          className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
+                          style={{
+                            background: 'rgba(50, 50, 50, 0.8)',
+                            border: '1px solid rgba(244, 154, 43, 0.3)',
+                            fontFamily: 'Montserrat, sans-serif'
+                          }}
+                        />
+                        {showCitySuggestions && citySuggestions.length > 0 && (
+                          <div style={{
+                            position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, zIndex: 100,
+                            background: 'rgba(30,30,30,0.98)', border: '1px solid rgba(244,154,43,0.35)',
+                            borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.5)', overflow: 'hidden',
+                          }}>
+                            {citySuggestions.map((s, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onMouseDown={(e) => { e.preventDefault(); handleCitySelect(s); }}
+                                style={{
+                                  width: '100%', padding: '10px 16px', border: 'none', textAlign: 'left',
+                                  background: 'transparent', cursor: 'pointer', display: 'flex',
+                                  alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                                  fontFamily: 'Montserrat, sans-serif',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(244,154,43,0.1)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                              >
+                                <span style={{ fontSize: 13, color: '#fff' }}>
+                                  {s.municipality}
+                                  {s.department && (
+                                    <span style={{ color: 'rgba(255,255,255,0.45)', marginLeft: 4 }}>
+                                      — {s.department}
+                                    </span>
+                                  )}
+                                </span>
+                                <span style={{ fontSize: 11, color: '#F49A2B', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                                  {s.region_name}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <div className="flex items-center justify-between px-1">
                         <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, fontFamily: 'Montserrat, sans-serif' }}>
-                          Ejemplo: Calle 10 #20-30, Medellín, Antioquia
+                          Escribe la ciudad y elige de la lista
                         </span>
                         <button
                           type="button"
