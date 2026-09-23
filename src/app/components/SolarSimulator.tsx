@@ -7,6 +7,7 @@ import solarPanelsIcon from '../assets/solar_panels_icon.svg';
 import emailIcon from '../assets/main_icon.svg';
 import whatsappIcon from '../assets/whatsapp_icon.svg';
 import { showSolarAlert } from './alert-custom';
+import { useVisibleFrame } from '@/app/hooks/useVisibleFrame';
 
 const SOLAR_API_BASE = 'https://simulador-adabtech-1faf32f78070.herokuapp.com/api';
 const SOLAR_SIMULATOR_ID = 'cc7110e6-0e5d-443e-858d-b4a77db9246b';
@@ -508,6 +509,33 @@ export function SolarSimulator() {
       }
     }
   }, [showQuoteForm, showModal, isAlertOpen]);
+
+  // Reporta la altura real del contenido al padre (iframe WordPress)
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (!root) return;
+    const reportHeight = () => {
+      const height = Math.ceil(root.getBoundingClientRect().height);
+      if (height < 100) return;
+      try {
+        window.parent.postMessage({ type: 'resize', height }, '*');
+      } catch {
+        // El simulador no está embebido.
+      }
+    };
+    reportHeight();
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(root);
+    const timer = window.setInterval(reportHeight, 800);
+    return () => {
+      observer.disconnect();
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const visibleBox = useVisibleFrame(showQuoteForm || showModal);
+  const modalGutter = visibleBox.height < 700 ? 12 : 20;
+  const modalMaxHeight = Math.max(160, visibleBox.height - modalGutter * 2);
 
   useEffect(() => {
     const fetchTarifa = async () => {
@@ -1018,18 +1046,10 @@ export function SolarSimulator() {
       {/* Modal */}
       {showModal && (
         <div
-          className="fixed inset-0 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] overflow-hidden"
           style={{
             background: 'rgba(0, 0, 0, 0.9)',
-            zIndex: 9999,
             backdropFilter: 'blur(8px)',
-            // Importante: fixed relativo al iframe para que el cálculo 
-            // de WordPress lo deje en el centro del viewport
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0
           }}
           onClick={() => {
             setShowModal(false);
@@ -1037,24 +1057,35 @@ export function SolarSimulator() {
           }}
         >
           <div
-            className="relative w-full max-w-2xl flex flex-col items-center"
-            onClick={(e) => e.stopPropagation()}
+            className="absolute flex items-center justify-center overflow-hidden"
+            style={{
+              top: visibleBox.top,
+              left: visibleBox.left,
+              width: visibleBox.width,
+              height: visibleBox.height,
+              padding: modalGutter,
+            }}
           >
-            {/* Botón de cierre y resto del contenido que ya tienes */}
-            <button
-              onClick={() => setShowModal(false)}
-              className="absolute -top-12 right-0 md:-right-4 p-2 text-orange-500"
+            <div
+              className="relative w-full max-w-2xl flex flex-col items-center min-h-0"
+              style={{ maxHeight: modalMaxHeight }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <X size={24} />
-            </button>
+              <button
+                onClick={() => setShowModal(false)}
+                className="absolute -top-10 right-0 md:-right-4 p-2 text-orange-500"
+              >
+                <X size={24} />
+              </button>
 
-            <img
-              src={consumptionImageIcon}
-              className="w-full h-auto rounded-lg shadow-2xl border border-orange-500/30"
-              style={{ maxHeight: '70vh', objectFit: 'contain' }}
-            />
+              <img
+                src={consumptionImageIcon}
+                className="w-full h-auto rounded-lg shadow-2xl border border-orange-500/30"
+                style={{ maxHeight: Math.max(120, modalMaxHeight - 48), objectFit: 'contain' }}
+              />
 
-            <p className="mt-4 text-white/60 text-sm">Haz clic afuera para cerrar</p>
+              <p className="mt-4 text-white/60 text-sm shrink-0">Haz clic afuera para cerrar</p>
+            </div>
           </div>
         </div>
       )}
@@ -1062,26 +1093,34 @@ export function SolarSimulator() {
       {/* Quote Form Modal */}
       {showQuoteForm && (
         <div
-          className="fixed inset-0 flex items-start md:items-center justify-center p-3 md:p-8 overflow-y-auto"
+          className="fixed inset-0 z-[9999] overflow-hidden"
           style={{
             background: 'rgba(0, 0, 0, 0.9)',
-            zIndex: 9999,
             backdropFilter: 'blur(8px)'
           }}
           onClick={() => setShowQuoteForm(false)}
         >
           <div
-            className="relative w-full max-w-md my-4 md:my-0"
-            onClick={(e) => e.stopPropagation()}
+            className="absolute flex items-center justify-center overflow-hidden"
+            style={{
+              top: visibleBox.top,
+              left: visibleBox.left,
+              width: visibleBox.width,
+              height: visibleBox.height,
+              paddingLeft: modalGutter,
+              paddingRight: modalGutter,
+            }}
           >
             {/* Form Container */}
             <div
-              className="quote-modal-scroll rounded-2xl px-4 pb-5 pt-3 md:px-6 md:pb-8 md:pt-2 max-h-[88vh] overflow-y-auto"
+              className="quote-modal-scroll relative w-full max-w-md rounded-2xl px-4 pb-5 pt-3 md:px-6 md:pb-8 md:pt-2 overflow-y-auto overscroll-contain min-h-0"
               style={{
+                maxHeight: modalMaxHeight,
                 background: 'rgba(30, 30, 30, 0.95)',
                 border: '2px solid rgba(244, 154, 43, 0.3)',
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
               }}
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Contenedor del Botón */}
               <div className="flex justify-end mb-2 md:mt-2">

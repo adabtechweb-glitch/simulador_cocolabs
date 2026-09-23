@@ -9,16 +9,16 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('solar');
 
   return (
-    <div>
+    <div className="bg-black">
       {/* Tab switcher */}
-      <div className="bg-[#0C2638] border-b border-white/10">
-        <div className="max-w-4xl mx-auto px-4 flex gap-1 pt-2">
+      <div className="bg-black border-b border-white/15">
+        <div className="max-w-4xl mx-auto px-4 flex gap-2 pt-2">
           <button
             onClick={() => setActiveTab('solar')}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-bold transition-all ${
               activeTab === 'solar'
-                ? 'bg-white text-[#0C2638]'
-                : 'text-white/50 hover:text-white hover:bg-white/10'
+                ? 'bg-[#F49A2B]/15 text-[#F49A2B] border border-[#F49A2B]/45 border-b-transparent'
+                : 'text-white/80 hover:text-white hover:bg-white/10 border border-transparent'
             }`}
           >
             <Sun className="w-4 h-4" />
@@ -28,8 +28,8 @@ export default function App() {
             onClick={() => setActiveTab('ev')}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-bold transition-all ${
               activeTab === 'ev'
-                ? 'bg-white text-[#0C2638]'
-                : 'text-white/50 hover:text-white hover:bg-white/10'
+                ? 'bg-[#1AB8D7]/15 text-[#1AB8D7] border border-[#1AB8D7]/45 border-b-transparent'
+                : 'text-white/80 hover:text-white hover:bg-white/10 border border-transparent'
             }`}
           >
             <Zap className="w-4 h-4" />
