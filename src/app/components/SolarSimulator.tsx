@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Zap, Grid3x3, Maximize, TrendingUp, X, ZoomIn, ChevronUp, ChevronDown, Info, Lock, MapPin, CheckCircle, Loader } from 'lucide-react';
+import { Zap, Grid3x3, Maximize, TrendingUp, X, ZoomIn, ChevronUp, ChevronDown, Info, Lock, MapPin, Loader2, Check } from 'lucide-react';
 import consumptionImageIcon from '../assets/consumption_image_icon.png';
 import estimatedInvestmentIcon from '../assets/estimated_investment_icon.svg';
 import monthlySavingsIcon from '../assets/monthly_savings_icon.svg';
@@ -7,7 +7,112 @@ import solarPanelsIcon from '../assets/solar_panels_icon.svg';
 import emailIcon from '../assets/main_icon.svg';
 import whatsappIcon from '../assets/whatsapp_icon.svg';
 import { showSolarAlert } from './alert-custom';
-import { submitToQuoteApi } from './submitToQuoteApi';
+
+const SOLAR_API_BASE = 'https://simulador-adabtech-1faf32f78070.herokuapp.com/api';
+const SOLAR_SIMULATOR_ID = 'cc7110e6-0e5d-443e-858d-b4a77db9246b';
+const SOLAR_SIMULATOR_KEY = 'DtivwlVNvffJCBU7qQZUQ8Rn8gItHptS';
+const QUOTE_REDIRECT_URL = 'https://adabtech.com/forms/quote';
+
+type LocationMode = 'idle' | 'detecting' | 'detected' | 'manual';
+
+type QuoteFormData = {
+  name: string;
+  contactType: 'whatsapp' | 'email';
+  whatsapp: string;
+  email: string;
+  address: string;
+  city: string;
+  department: string;
+  location_maps: string;
+};
+
+type GeoCoords = { lat: number; lon: number };
+
+type MunicipalityOption = {
+  municipality: string;
+  department?: string;
+  region_name?: string;
+};
+
+type RegionSuggestion = {
+  region_id: string | number;
+  display: string;
+  region_name: string;
+  hsp_avg?: number;
+  tariff_cop_per_kwh?: number;
+};
+
+const emptyQuoteForm = (): QuoteFormData => ({
+  name: '',
+  contactType: 'whatsapp',
+  whatsapp: '',
+  email: '',
+  address: '',
+  city: '',
+  department: '',
+  location_maps: '',
+});
+
+function solarApiBase() {
+  const base = SOLAR_API_BASE.replace(/\/$/, '');
+  return base.endsWith('/api') ? base : `${base}/api`;
+}
+
+function cleanPlaceName(value: string) {
+  return (value || '')
+    .replace(/^per[ií]metro\s+urbano\s+(de\s+)?/i, '')
+    .replace(/^zona\s+urbana\s+(de\s+)?/i, '')
+    .replace(/^area\s+metropolitana\s+(de\s+)?/i, '')
+    .replace(/^área\s+metropolitana\s+(de\s+)?/i, '')
+    .replace(/^municipio\s+de\s+/i, '')
+    .replace(/^distrito\s+de\s+/i, '')
+    .trim();
+}
+
+async function reverseGeocode(lat: number, lon: number) {
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`
+  );
+  const data = await response.json();
+  const address = data.address || {};
+  const city =
+    [address.city, address.town, address.municipality, address.village, address.county, data.name]
+      .map((part: string | undefined) => cleanPlaceName((part || '').trim()))
+      .filter(Boolean)[0] || '';
+  const street = [
+    cleanPlaceName((address.road || '').trim()),
+    cleanPlaceName((address.house_number || '').trim()),
+    cleanPlaceName((address.neighbourhood || address.suburb || address.quarter || '').trim()),
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const department = cleanPlaceName((address.state || address.region || address.state_district || '').trim());
+  const label = [address.road, address.neighbourhood || address.suburb || address.quarter, city, department]
+    .filter(Boolean)
+    .join(', ');
+  return { address: street, city, department, label };
+}
+
+async function submitSolarQuote(payload: Record<string, unknown>) {
+  try {
+    const response = await fetch(`${solarApiBase()}/quotations/from-simulator/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulator-Key': SOLAR_SIMULATOR_KEY,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      console.error(`Error ${response.status}:`, await response.text());
+      return false;
+    }
+    return !!(await response.json()).id;
+  } catch (error) {
+    console.error('Error submitting quote:', error);
+    return false;
+  }
+}
 
 export function SolarSimulator() {
   // --- ESTADOS ---
@@ -22,42 +127,16 @@ export function SolarSimulator() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Estado persistente del formulario
-  const [formData, setFormData] = useState({
-    name: '',
-    contactType: 'whatsapp' as 'whatsapp' | 'email',
-    whatsapp: '',
-    email: '',
-    address: '',
-    city: '',
-    department: '',
-    location_maps: ''
-  });
-
-  // Estado del campo de ubicación
-  const [locationMode, setLocationMode] = useState<'idle' | 'detecting' | 'detected' | 'manual'>('idle');
-  const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
-  const [regionSuggestions, setRegionSuggestions] = useState<Array<{ region_id: number; region_name: string; display: string; hsp_avg?: number; tariff_cop_per_kwh?: number }>>([]);
-  const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
-  const [regionHsp, setRegionHsp] = useState<number>(3.5);
-  const [panelPowerW, setPanelPowerW] = useState<number>(620);
-  const [areaPerPanelM2, setAreaPerPanelM2] = useState<number>(3.3);
-
-  // Estado autocomplete de ciudad
-  type CitySuggestion = { municipality: string; department: string; region_id: number; region_name: string };
-  const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
-  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
-  const cityDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cityInputRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (cityInputRef.current && !cityInputRef.current.contains(e.target as Node)) {
-        setShowCitySuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const [formData, setFormData] = useState<QuoteFormData>(emptyQuoteForm);
+  const [locationMode, setLocationMode] = useState<LocationMode>('idle');
+  const [coords, setCoords] = useState<GeoCoords | null>(null);
+  const [regionSuggestions, setRegionSuggestions] = useState<RegionSuggestion[]>([]);
+  const [regionId, setRegionId] = useState<string | number | null>(null);
+  const [sunHours, setSunHours] = useState(3.5);
+  const [panelPowerW, setPanelPowerW] = useState(620);
+  const [areaPerPanelM2, setAreaPerPanelM2] = useState(3.3);
+  const [municipalities, setMunicipalities] = useState<MunicipalityOption[]>([]);
+  const [showMunicipalityList, setShowMunicipalityList] = useState(false);
 
   // --- REFERENCIAS (REFS) ---
   // Se agregan todas las que pide tu JSX para evitar errores de "Cannot find name"
@@ -68,12 +147,11 @@ export function SolarSimulator() {
   const infoButtonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const municipalitySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const municipalityBoxRef = useRef<HTMLDivElement>(null);
 
   // --- CONSTANTES DE NEGOCIO ---
   const CONSTANTS = {
-    HORAS_EFECTIVAS: 3.5,
-    POTENCIA_PANEL_W: 620,
-    AREA_POR_PANEL_M2: 3.3,
     INTERCEPTO: 12127227.5,
     PENDIENTE: 25341.4494,
     FACTOR_RETAIL: 1.3728,
@@ -85,7 +163,7 @@ export function SolarSimulator() {
     // Forzamos que el cálculo use al menos 300 aunque el estado diga menos
     const consumoValidado = Math.max(300, consumo);
 
-    const potenciaPico = (consumoValidado / 30) / regionHsp;
+    const potenciaPico = (consumoValidado / 30) / sunHours;
     const paneles = Math.ceil((potenciaPico * 1000) / panelPowerW);
     const area = Math.round(paneles * areaPerPanelM2 * 100) / 100;
     const precioBase = CONSTANTS.INTERCEPTO + (CONSTANTS.PENDIENTE * consumoValidado);
@@ -145,176 +223,122 @@ export function SolarSimulator() {
     return 'Comercial/Industrial - Consumo alto';
   };
 
-  const sanitizeLocationToken = (value: string) => {
-    return (value || '')
-      .replace(/^per[ií]metro\s+urbano\s+(de\s+)?/i, '')
-      .replace(/^zona\s+urbana\s+(de\s+)?/i, '')
-      .replace(/^area\s+metropolitana\s+(de\s+)?/i, '')
-      .replace(/^área\s+metropolitana\s+(de\s+)?/i, '')
-      .replace(/^municipio\s+de\s+/i, '')
-      .replace(/^distrito\s+de\s+/i, '')
-      .trim();
-  };
-
-  // --- HANDLERS DE UBICACIÓN ---
-  const reverseGeocode = async (lat: number, lon: number): Promise<{ address: string; city: string; department: string; label: string }> => {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`
-    );
-    const data = await res.json();
-    const addr = data.address || {};
-
-    const cityCandidates = [
-      addr.city,
-      addr.town,
-      addr.municipality,
-      addr.village,
-      addr.county,
-      data.name,
-    ]
-      .map((item: string | undefined) => sanitizeLocationToken((item || '').trim()))
-      .filter(Boolean);
-
-    const city = cityCandidates[0] || '';
-
-    const address = [
-      sanitizeLocationToken((addr.road || '').trim()),
-      sanitizeLocationToken((addr.house_number || '').trim()),
-      sanitizeLocationToken(((addr.neighbourhood || addr.suburb || addr.quarter || '') as string).trim()),
-    ]
-      .filter(Boolean)
-      .join(', ');
-
-    const department = sanitizeLocationToken((
-      addr.state ||
-      addr.region ||
-      addr.state_district ||
-      ''
-    ).trim());
-
-    const parts = [
-      addr.road,
-      addr.neighbourhood || addr.suburb || addr.quarter,
-      city,
-      department,
-    ].filter(Boolean);
-
-    return {
-      address,
-      city,
-      department,
-      label: parts.join(', '),
-    };
-  };
-
-  const handleDetectLocation = () => {
-    setLocationMode('detecting');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const locationData = await reverseGeocode(latitude, longitude);
-        const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
-        setLocationCoords({ lat: latitude, lon: longitude });
-        setFormData(prev => ({
-          ...prev,
-          address: locationData.address,
-          city: locationData.city,
-          department: locationData.department,
-          location_maps: mapsUrl,
-        }));
-        setLocationMode('detected');
-        if (locationData.city) detectRegionForSimulator(locationData.city);
-      },
-      () => {
-        setLocationMode('manual');
-      },
-      { timeout: 10000 }
-    );
-  };
-
-  const getLocationInputValue = () => {
-    return [formData.address, formData.city, formData.department]
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .join(', ');
-  };
-
-  const applyLocationInput = (value: string) => {
-    setFormData({ ...formData, address: value, city: '', department: '' });
-    setRegionSuggestions([]);
-    setSelectedRegionId(null);
-  };
-
-  const handleManualCityChange = (value: string) => {
-    applyLocationInput(value);
-    if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
-    if (value.trim().length < 2) {
-      setCitySuggestions([]);
-      setShowCitySuggestions(false);
-      return;
-    }
-    cityDebounceRef.current = setTimeout(async () => {
-      try {
-        const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
-        const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
-        const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
-        const res = await fetch(
-          `${apiBase}/quotations/simulator-municipalities/?q=${encodeURIComponent(value.trim())}`,
-          { headers: { 'X-Simulator-Key': apiKey } }
-        );
-        if (!res.ok) return;
-        const data: CitySuggestion[] = await res.json();
-        setCitySuggestions(data);
-        setShowCitySuggestions(data.length > 0);
-      } catch {
-        setCitySuggestions([]);
-      }
-    }, 280);
-  };
-
-  const handleCitySelect = (s: CitySuggestion) => {
-    const address = s.department ? `${s.municipality}, ${s.department}` : s.municipality;
-    setFormData(prev => ({ ...prev, address, city: s.municipality, department: s.department }));
-    setShowCitySuggestions(false);
-    setCitySuggestions([]);
-    setRegionSuggestions([]);
-    detectRegionForSimulator(s.municipality);
-  };
-
-  const detectRegionForSimulator = async (city: string) => {
-    if (!city.trim()) return;
-    try {
-      const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
-      const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
-      const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
-      const simulatorId = import.meta.env.VITE_SIMULATOR_ID || 'cc7110e6-0e5d-443e-858d-b4a77db9246b';
-      const res = await fetch(`${apiBase}/quotations/simulator-detect-region/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Simulator-Key': apiKey },
-        body: JSON.stringify({ city, simulatorId }),
-      });
-      const data = await res.json();
-      if (data.matched_by === 'ambiguous' && data.suggestions?.length) {
-        setRegionSuggestions(data.suggestions);
-      } else {
-        setRegionSuggestions([]);
-        if (data.region?.id) {
-          setSelectedRegionId(data.region.id);
-          if (data.region.hsp_avg) setRegionHsp(data.region.hsp_avg);
-          if (data.region.tariff_cop_per_kwh) setTarifaEnergia(data.region.tariff_cop_per_kwh);
-        }
-      }
-    } catch {}
-  };
-
   // --- HANDLERS DEL FORMULARIO ---
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const targetField = name || formData.contactType;
+    setFormData(prev => ({ ...prev, [targetField]: value }));
+  };
+
+  const handleContactMethodChange = (method: 'whatsapp' | 'email') => {
+    setFormData(prev => ({ ...prev, contactType: method }));
+  };
+
   const showAlert = async (icon: any, title: string, message: string) => {
     setIsAlertOpen(true); // Activa el centrado en el useEffect
     return await showSolarAlert(icon, title, message); // Llama a tu función de figma/src/app/components/alert-custom.tsx
   };
 
+  const detectRegion = async (city: string) => {
+    if (!city.trim()) return;
+    try {
+      const response = await fetch(`${solarApiBase()}/quotations/simulator-detect-region/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Simulator-Key': SOLAR_SIMULATOR_KEY,
+        },
+        body: JSON.stringify({ city, simulatorId: SOLAR_SIMULATOR_ID }),
+      });
+      const data = await response.json();
+      if (data.matched_by === 'ambiguous' && data.suggestions?.length) {
+        setRegionSuggestions(data.suggestions);
+      } else {
+        setRegionSuggestions([]);
+        if (data.region?.id) {
+          setRegionId(data.region.id);
+          if (data.region.hsp_avg) setSunHours(data.region.hsp_avg);
+          if (data.region.tariff_cop_per_kwh) setTarifaEnergia(data.region.tariff_cop_per_kwh);
+        }
+      }
+    } catch {
+      // Producción ignora el fallo y deja la simulación con los valores actuales.
+    }
+  };
+
+  const detectLocation = () => {
+    setLocationMode('detecting');
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      const place = await reverseGeocode(latitude, longitude);
+      const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+      setCoords({ lat: latitude, lon: longitude });
+      setFormData((prev) => ({
+        ...prev,
+        address: place.address,
+        city: place.city,
+        department: place.department,
+        location_maps: mapsUrl,
+      }));
+      setLocationMode('detected');
+      if (place.city) detectRegion(place.city);
+    }, () => {
+      setLocationMode('manual');
+    }, { timeout: 10000 });
+  };
+
+  const formatDetectedLocation = () =>
+    [formData.address, formData.city, formData.department].map((part) => part.trim()).filter(Boolean).join(', ');
+
+  const onDetectedLocationChange = (value: string) => {
+    setFormData({ ...formData, address: value, city: '', department: '' });
+    setRegionSuggestions([]);
+    setRegionId(null);
+  };
+
+  const onManualAddressChange = (value: string) => {
+    onDetectedLocationChange(value);
+    if (municipalitySearchTimer.current) clearTimeout(municipalitySearchTimer.current);
+    if (value.trim().length < 2) {
+      setMunicipalities([]);
+      setShowMunicipalityList(false);
+      return;
+    }
+    municipalitySearchTimer.current = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `${solarApiBase()}/quotations/simulator-municipalities/?q=${encodeURIComponent(value.trim())}`,
+          { headers: { 'X-Simulator-Key': SOLAR_SIMULATOR_KEY } }
+        );
+        if (!response.ok) return;
+        const list: MunicipalityOption[] = await response.json();
+        setMunicipalities(list);
+        setShowMunicipalityList(list.length > 0);
+      } catch {
+        setMunicipalities([]);
+      }
+    }, 280);
+  };
+
+  const selectMunicipality = (item: MunicipalityOption) => {
+    const address = item.department ? `${item.municipality}, ${item.department}` : item.municipality;
+    setFormData((prev) => ({
+      ...prev,
+      address,
+      city: item.municipality,
+      department: item.department || '',
+    }));
+    setShowMunicipalityList(false);
+    setMunicipalities([]);
+    setRegionSuggestions([]);
+    detectRegion(item.municipality);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isEmail = formData.contactType === 'email';
+    const contactValue = isEmail ? formData.email : formData.whatsapp;
 
     // --- VALIDACIONES POR CASOS ---
 
@@ -329,17 +353,17 @@ export function SolarSimulator() {
     if (formData.name.trim().length < 3) {
       setShowQuoteForm(false);
       showAlert('error', 'Nombre incompleto', 'Por favor, ingresa tu nombre completo.');
-      return;
+      return; // Detiene la ejecución aquí
     }
-
-    const isEmail = formData.contactType === 'email';
-    const contactValue = isEmail ? formData.email : formData.whatsapp;
 
     // Caso 2: Validación de Email
     if (isEmail) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+      // 1. Extraemos el dominio completo
       const domain = contactValue.split('@')[1]?.toLowerCase() || "";
+
+      // 2. Definimos dominios y TLDs prohibidos según RFC 2606
       const reservedDomains = ['example.com', 'example.net', 'example.org'];
       const reservedTLDs = ['.test', '.example', '.invalid', '.localhost'];
 
@@ -347,6 +371,7 @@ export function SolarSimulator() {
       const isReservedTLD = reservedTLDs.some(tld => domain.endsWith(tld));
 
       if (!emailRegex.test(contactValue) || isReservedDomain || isReservedTLD) {
+
         let errorMsg = 'La dirección de correo electrónico no es correcta.';
         if (isReservedDomain || isReservedTLD) {
           errorMsg = 'Parece que estás usando un dominio de prueba. Por seguridad, requerimos una dirección de correo activa.';
@@ -361,6 +386,7 @@ export function SolarSimulator() {
     // Caso 3: Validación de Teléfono (WhatsApp)
     else {
       const phoneRegex = /^\d{7,15}$/;
+      // Verifica si todos los números son iguales (ej: "9999999")
       const isAllSameDigits = contactValue.split('').every(char => char === contactValue[0]);
 
       if (!phoneRegex.test(contactValue) || isAllSameDigits) {
@@ -376,24 +402,20 @@ export function SolarSimulator() {
       }
     }
 
-    // Caso 4: Validación de Ubicación
-    // En modo manual, solo necesitamos que haya algo en address
-    // En modo detectado, necesitamos city o department
-    const hasLocationData = locationMode === 'manual' 
+    const locationIsValid = locationMode === 'manual'
       ? formData.address.trim().length > 2
       : formData.city.trim().length >= 2 || formData.department.trim().length >= 2;
-    
-    if (!hasLocationData) {
+
+    if (!locationIsValid) {
       setShowQuoteForm(false);
       showAlert('error', 'Ubicación incompleta', 'Ingresa una dirección válida para ubicar la instalación.');
       return;
     }
 
-    const locationSummary = locationMode === 'manual' ? formData.address : getLocationInputValue();
-    const cityValue = formData.city.trim() || locationSummary.trim();
+    const locationLabel = locationMode === 'manual' ? formData.address : formatDetectedLocation();
+    const cityValue = formData.city.trim() || locationLabel.trim();
     const departmentValue = formData.department.trim();
 
-    // --- SI PASA TODAS LAS VALIDACIONES, SE EJECUTA EL ENVÍO ---
     setIsSubmitting(true);
 
     const payload = {
@@ -402,7 +424,7 @@ export function SolarSimulator() {
         contact: contactValue,
         contactType: formData.contactType,
         segmento: consumption <= 3000 ? 'Hogar' : 'Empresa',
-        ciudad: locationSummary.trim() || cityValue,
+        ciudad: locationLabel.trim() || cityValue,
         departamento: departmentValue
       },
       simulationResults: {
@@ -415,69 +437,56 @@ export function SolarSimulator() {
       }
     };
 
-    try {
-      const quoteApiPayload = {
-        clientName: formData.name,
-        email: formData.email,
-        phone: formData.whatsapp,
-        city: locationSummary.trim() || cityValue,
-        department: departmentValue,
-        location_maps: formData.location_maps || locationSummary,
-        regionId: selectedRegionId ?? undefined,
-        monthlyConsumption: consumption,
-        estimatedInvestment: results.precio,
-        panelCount: results.paneles,
-        requiredArea: results.area,
-        peakPower: results.potenciaPico,
-        simulatorId: 'cc7110e6-0e5d-443e-858d-b4a77db9246b',
-      };
+    const quotePayload = {
+      clientName: formData.name,
+      email: formData.email,
+      phone: formData.whatsapp,
+      city: locationLabel.trim() || cityValue,
+      department: departmentValue,
+      location_maps: formData.location_maps || locationLabel,
+      regionId: regionId ?? undefined,
+      monthlyConsumption: consumption,
+      estimatedInvestment: results.precio,
+      panelCount: results.paneles,
+      requiredArea: results.area,
+      peakPower: results.potenciaPico,
+      simulatorId: SOLAR_SIMULATOR_ID,
+    };
 
-      // Envío a Google Forms (principal) y al cotizador en paralelo
-      const [phpResult] = await Promise.all([
+    try {
+      const [googleResult] = await Promise.all([
         fetch(`${window.location.origin}/submit-to-google.php/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-        }).then(r => r.json()).catch(() => null),
-        submitToQuoteApi(quoteApiPayload).catch(() => null),
+        }).then((response) => response.json()).catch(() => null),
+        submitSolarQuote(quotePayload).catch(() => null),
       ]);
 
-      const success = phpResult?.status === 'success';
-
-      if (success) {
+      if (googleResult?.status === 'success') {
         setShowQuoteForm(false);
         const successMsg = isEmail
           ? 'Tu propuesta llegará pronto a tu correo. ¡No olvides revisar tu bandeja!'
           : '¡Perfecto! Te enviaremos un mensaje por WhatsApp en breve.';
 
         showAlert('success', '¡Recibido!', successMsg);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Reinicia los campos de texto del formulario
-        setFormData({
-          name: '',
-          contactType: 'whatsapp',
-          whatsapp: '',
-          email: '',
-          address: '',
-          city: '',
-          department: '',
-          location_maps: ''
-        });
+        setFormData(emptyQuoteForm());
         setRegionSuggestions([]);
-        setSelectedRegionId(null);
-
-        // Reinicia el valor del simulador y su campo de texto a 300
+        setRegionId(null);
         setConsumption(300);
         setInputValue('300');
 
-        // Redirige al formulario de cotización una vez ambas llamadas terminaron y el usuario leyó el mensaje
-        window.top ? window.top.location.href = 'https://adabtech.com/forms/quote' : window.location.href = 'https://adabtech.com/forms/quote';
+        if (window.top) {
+          window.top.location.href = QUOTE_REDIRECT_URL;
+        } else {
+          window.location.href = QUOTE_REDIRECT_URL;
+        }
       } else {
         showAlert('error', 'Error de servidor', 'No pudimos procesar los datos. Intenta más tarde.');
       }
-    } catch (error) {
+    } catch {
       showAlert('error', 'Error de conexión', 'No hubo respuesta del servidor.');
     } finally {
       setIsSubmitting(false);
@@ -524,23 +533,31 @@ export function SolarSimulator() {
   }, []);
 
   useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      if (municipalityBoxRef.current && !municipalityBoxRef.current.contains(event.target as Node)) {
+        setShowMunicipalityList(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, []);
+
+  useEffect(() => {
     const fetchSimulatorConfig = async () => {
       try {
-        const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
-        const apiBase = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
-        const apiKey = import.meta.env.VITE_API_KEY || 'sim-adabtech-2026-secret';
-        const simulatorId = import.meta.env.VITE_SIMULATOR_ID || 'cc7110e6-0e5d-443e-858d-b4a77db9246b';
-        const res = await fetch(`${apiBase}/quotations/simulator-config/${simulatorId}/`, {
-          headers: { 'X-Simulator-Key': apiKey },
+        const response = await fetch(`${solarApiBase()}/quotations/simulator-config/${SOLAR_SIMULATOR_ID}/`, {
+          headers: { 'X-Simulator-Key': SOLAR_SIMULATOR_KEY },
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.panelPowerW) setPanelPowerW(data.panelPowerW);
-          if (data.areaPerPanelM2) setAreaPerPanelM2(data.areaPerPanelM2);
-          if (data.sunHoursPerDay) setRegionHsp(data.sunHoursPerDay);
-        }
-      } catch {}
+        if (!response.ok) return;
+        const config = await response.json();
+        if (config.panelPowerW) setPanelPowerW(config.panelPowerW);
+        if (config.areaPerPanelM2) setAreaPerPanelM2(config.areaPerPanelM2);
+        if (config.sunHoursPerDay) setSunHours(config.sunHoursPerDay);
+      } catch {
+        // Si falla, se quedan los valores por defecto de producción.
+      }
     };
+
     fetchSimulatorConfig();
   }, []);
 
@@ -550,7 +567,7 @@ export function SolarSimulator() {
 
   return (
     <section
-      className="relative w-full min-h-screen flex flex-col items-center justify-start px-4 pt-16 pb-16 overflow-hidden"
+      className="relative w-full flex flex-col items-center justify-start px-4 pt-16 pb-16 overflow-hidden"
       style={{
         background: '#000000',
         fontFamily: 'Manrope, sans-serif'
@@ -559,7 +576,7 @@ export function SolarSimulator() {
       {/* Atmospheric background */}
       <div className="absolute inset-0 opacity-20">
         <div
-          className="absolute top-0 right-0 w-200 h-200 rounded-full blur-3xl"
+          className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full blur-3xl"
           style={{ background: 'radial-gradient(circle, rgba(26, 184, 215, 0.25) 0%, transparent 70%)' }}
         ></div>
       </div>
@@ -626,7 +643,7 @@ export function SolarSimulator() {
               >
                 ¿Cuánta energía consumes al mes?
               </p>
-              <div className="relative shrink-0">
+              <div className="relative flex-shrink-0">
                 <button
                   onClick={() => setShowModal(true)}
                   onMouseEnter={() => setShowTooltip('question')}
@@ -679,7 +696,7 @@ export function SolarSimulator() {
               >
                 <div className="flex items-center justify-center gap-2 sm:gap-4 flex-nowrap">
                   {/* Decrement Button */}
-                  <div className="relative shrink-0">
+                  <div className="relative flex-shrink-0">
                     <button
                       onClick={handleDecrement}
                       onMouseEnter={() => setShowTooltip('decrement')}
@@ -726,7 +743,7 @@ export function SolarSimulator() {
                   </div>
 
                   {/* Increment Button */}
-                  <div className="relative shrink-0">
+                  <div className="relative flex-shrink-0">
                     <button
                       onClick={handleIncrement}
                       onMouseEnter={() => setShowTooltip('increment')}
@@ -837,7 +854,7 @@ export function SolarSimulator() {
           >
             <div className="relative z-10 flex items-start gap-4">
               <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
+                className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={estimatedInvestmentIcon} alt="Inversión" className="w-6 h-6" />
@@ -876,7 +893,7 @@ export function SolarSimulator() {
           >
             <div className="relative z-10 flex items-start gap-4">
               <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
+                className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={monthlySavingsIcon} alt="Ahorro" className="w-6 h-6" />
@@ -915,7 +932,7 @@ export function SolarSimulator() {
           >
             <div className="relative z-10 flex items-start gap-4">
               <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
+                className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(244, 154, 43, 0.15)' }}
               >
                 <img src={solarPanelsIcon} alt="Paneles" className="w-6 h-6" />
@@ -949,7 +966,10 @@ export function SolarSimulator() {
           <div className="relative inline-block">
             <button
               ref={ctaButtonRef}
-              onClick={() => { setShowQuoteForm(true); handleDetectLocation(); }}
+              onClick={() => {
+                setShowQuoteForm(true);
+                detectLocation();
+              }}
               /* onClick={handleGoToForm} */
               onMouseEnter={() => setShowTooltip('ctaButton')}
               onMouseLeave={() => setShowTooltip(null)}
@@ -1124,7 +1144,7 @@ export function SolarSimulator() {
                   />
                 </div>
 
-                {/* Preferencia de contacto */}
+                {/* Contact Type Toggle */}
                 <div className="mb-4">
                   <label
                     className="block text-sm font-medium mb-2"
@@ -1136,7 +1156,7 @@ export function SolarSimulator() {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, contactType: 'email' })}
-                      className="flex-1 min-w-35 px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                      className="flex-1 min-w-[140px] px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
                         background: formData.contactType === 'email' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
                         color: formData.contactType === 'email' ? '#000' : 'rgba(255, 255, 255, 0.7)',
@@ -1144,14 +1164,14 @@ export function SolarSimulator() {
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      <img src={emailIcon} alt="" className="w-5 h-5 shrink-0"
+                      <img src={emailIcon} alt="" className="w-5 h-5 flex-shrink-0"
                         style={{ filter: formData.contactType === 'email' ? 'none' : 'brightness(0.8)' }} />
                       <span>Email</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, contactType: 'whatsapp' })}
-                      className="flex-1 min-w-35 px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                      className="flex-1 min-w-[140px] px-3 py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
                       style={{
                         background: formData.contactType === 'whatsapp' ? '#F49A2B' : 'rgba(50, 50, 50, 0.8)',
                         color: formData.contactType === 'whatsapp' ? '#000' : 'rgba(255, 255, 255, 0.7)',
@@ -1159,64 +1179,61 @@ export function SolarSimulator() {
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      <img src={whatsappIcon} alt="" className="w-5 h-5 shrink-0"
+                      <img src={whatsappIcon} alt="" className="w-5 h-5 flex-shrink-0"
                         style={{ filter: formData.contactType === 'whatsapp' ? 'none' : 'brightness(0.8)' }} />
                       <span>WhatsApp</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Email - solo visible si contactType es email */}
                 {formData.contactType === 'email' && (
-                <div className="mb-6">
-                  <label
-                    className="block text-sm font-medium mb-2"
-                    style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
-                  >
-                    Correo electrónico
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="ejemplo@correo.com"
-                    className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
-                    style={{
-                      background: 'rgba(50, 50, 50, 0.8)',
-                      border: '1px solid rgba(244, 154, 43, 0.3)',
-                      fontFamily: 'Montserrat, sans-serif'
-                    }}
-                  />
-                </div>
+                  <div className="mb-6">
+                    <label
+                      className="block text-sm font-medium mb-2"
+                      style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      Correo electrónico
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="ejemplo@correo.com"
+                      className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
+                      style={{
+                        background: 'rgba(50, 50, 50, 0.8)',
+                        border: '1px solid rgba(244, 154, 43, 0.3)',
+                        fontFamily: 'Montserrat, sans-serif'
+                      }}
+                    />
+                  </div>
                 )}
 
-                {/* Teléfono - solo visible si contactType es whatsapp */}
                 {formData.contactType === 'whatsapp' && (
-                <div className="mb-6">
-                  <label
-                    className="block text-sm font-medium mb-2"
-                    style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
-                  >
-                    WhatsApp
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={formData.whatsapp}
-                    onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                    placeholder="300 123 4567"
-                    className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
-                    style={{
-                      background: 'rgba(50, 50, 50, 0.8)',
-                      border: '1px solid rgba(244, 154, 43, 0.3)',
-                      fontFamily: 'Montserrat, sans-serif'
-                    }}
-                  />
-                </div>
+                  <div className="mb-6">
+                    <label
+                      className="block text-sm font-medium mb-2"
+                      style={{ color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      WhatsApp
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={formData.whatsapp}
+                      onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                      placeholder="300 123 4567"
+                      className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
+                      style={{
+                        background: 'rgba(50, 50, 50, 0.8)',
+                        border: '1px solid rgba(244, 154, 43, 0.3)',
+                        fontFamily: 'Montserrat, sans-serif'
+                      }}
+                    />
+                  </div>
                 )}
 
-                {/* Ubicación */}
                 <div className="mb-6">
                   <label
                     className="block text-sm font-medium mb-2"
@@ -1225,19 +1242,18 @@ export function SolarSimulator() {
                     Ubicación del lugar de instalación
                   </label>
 
-                  {/* idle: dos opciones */}
                   {locationMode === 'idle' && (
                     <div className="flex flex-col gap-2">
                       <button
                         type="button"
-                        onClick={handleDetectLocation}
+                        onClick={detectLocation}
                         className="w-full px-4 py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all hover:brightness-110"
                         style={{
                           background: 'rgba(244, 154, 43, 0.15)',
                           border: '1px solid rgba(244, 154, 43, 0.4)',
                           color: '#F49A2B',
                           fontFamily: 'Montserrat, sans-serif',
-                          cursor: 'pointer',
+                          cursor: 'pointer'
                         }}
                       >
                         <MapPin className="w-4 h-4 shrink-0" />
@@ -1247,32 +1263,36 @@ export function SolarSimulator() {
                         type="button"
                         onClick={() => setLocationMode('manual')}
                         className="w-full text-center text-xs py-1 transition-all hover:underline"
-                        style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'Montserrat, sans-serif', background: 'none', border: 'none', cursor: 'pointer' }}
+                        style={{
+                          color: 'rgba(255,255,255,0.45)',
+                          fontFamily: 'Montserrat, sans-serif',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
                       >
                         Ingresar manualmente
                       </button>
                     </div>
                   )}
 
-                  {/* detecting: spinner */}
                   {locationMode === 'detecting' && (
                     <div
                       className="w-full px-4 py-3 rounded-lg flex items-center gap-3"
                       style={{ background: 'rgba(50,50,50,0.8)', border: '1px solid rgba(244,154,43,0.3)' }}
                     >
-                      <Loader className="w-4 h-4 animate-spin shrink-0" style={{ color: '#F49A2B' }} />
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" style={{ color: '#F49A2B' }} />
                       <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontFamily: 'Montserrat, sans-serif' }}>
                         Detectando ubicación…
                       </span>
                     </div>
                   )}
 
-                  {/* detected: ubicación detectada y editable */}
                   {locationMode === 'detected' && (
                     <div className="flex flex-col gap-3">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <CheckCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#34d399' }} />
+                          <Check className="w-3.5 h-3.5 shrink-0" style={{ color: '#34d399' }} />
                           <span style={{ color: '#34d399', fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 600 }}>
                             Ubicación detectada · puedes editarla
                           </span>
@@ -1280,20 +1300,20 @@ export function SolarSimulator() {
                         <div className="flex gap-2">
                           <input
                             type="text"
-                            value={getLocationInputValue()}
-                            onChange={(e) => applyLocationInput(e.target.value)}
+                            value={formatDetectedLocation()}
+                            onChange={(e) => onDetectedLocationChange(e.target.value)}
                             placeholder="Dirección, Ciudad, Departamento"
                             className="flex-1 px-4 py-3 rounded-lg text-white outline-none transition-all focus:ring-2"
                             style={{
                               background: 'rgba(50,50,50,0.8)',
                               border: '1px solid rgba(52,211,153,0.4)',
                               fontFamily: 'Montserrat, sans-serif',
-                              fontSize: 14,
+                              fontSize: 14
                             }}
                           />
-                          {locationCoords && (
+                          {coords && (
                             <a
-                              href={`https://www.google.com/maps?q=${locationCoords.lat},${locationCoords.lon}`}
+                              href={`https://www.google.com/maps?q=${coords.lat},${coords.lon}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Ver en Google Maps"
@@ -1301,7 +1321,7 @@ export function SolarSimulator() {
                               style={{
                                 background: 'rgba(52,211,153,0.15)',
                                 border: '1px solid rgba(52,211,153,0.4)',
-                                color: '#34d399',
+                                color: '#34d399'
                               }}
                             >
                               <MapPin className="w-4 h-4" />
@@ -1311,14 +1331,23 @@ export function SolarSimulator() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => { setFormData(prev => ({ ...prev, address: '', city: '', department: '', location_maps: '' })); setLocationMode('manual'); }}
+                        onClick={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            address: '',
+                            city: '',
+                            department: '',
+                            location_maps: '',
+                          }));
+                          setLocationMode('manual');
+                        }}
                         className="w-full px-4 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:brightness-110"
                         style={{
-                         background: 'rgba(244, 154, 43, 0.15)',
+                          background: 'rgba(244, 154, 43, 0.15)',
                           border: '1px solid rgba(244, 154, 43, 0.4)',
                           color: '#F49A2B',
                           fontFamily: 'Montserrat, sans-serif',
-                          cursor: 'pointer',
+                          cursor: 'pointer'
                         }}
                       >
                         <MapPin className="w-4 h-4 shrink-0" />
@@ -1327,17 +1356,20 @@ export function SolarSimulator() {
                     </div>
                   )}
 
-                  {/* manual: input libre */}
                   {locationMode === 'manual' && (
                     <div className="flex flex-col gap-2">
-                      <div ref={cityInputRef} style={{ position: 'relative' }}>
+                      <div ref={municipalityBoxRef} style={{ position: 'relative' }}>
                         <input
                           type="text"
                           required
                           value={formData.address}
-                          onChange={(e) => handleManualCityChange(e.target.value)}
-                          onFocus={() => { if (citySuggestions.length > 0) setShowCitySuggestions(true); }}
-                          onBlur={(e) => { if (!showCitySuggestions) detectRegionForSimulator(e.target.value); }}
+                          onChange={(e) => onManualAddressChange(e.target.value)}
+                          onFocus={() => {
+                            if (municipalities.length > 0) setShowMunicipalityList(true);
+                          }}
+                          onBlur={(e) => {
+                            if (!showMunicipalityList) detectRegion(e.target.value);
+                          }}
                           placeholder="Ciudad o municipio"
                           className="w-full px-4 py-3 rounded-lg text-white placeholder-gray-500 outline-none transition-all focus:ring-2"
                           style={{
@@ -1346,36 +1378,59 @@ export function SolarSimulator() {
                             fontFamily: 'Montserrat, sans-serif'
                           }}
                         />
-                        {showCitySuggestions && citySuggestions.length > 0 && (
-                          <div style={{
-                            position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, zIndex: 100,
-                            background: 'rgba(30,30,30,0.98)', border: '1px solid rgba(244,154,43,0.35)',
-                            borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.5)', overflow: 'hidden',
-                          }}>
-                            {citySuggestions.map((s, i) => (
+                        {showMunicipalityList && municipalities.length > 0 && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 2px)',
+                              left: 0,
+                              right: 0,
+                              zIndex: 100,
+                              background: 'rgba(30,30,30,0.98)',
+                              border: '1px solid rgba(244,154,43,0.35)',
+                              borderRadius: 8,
+                              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            {municipalities.map((item, index) => (
                               <button
-                                key={i}
+                                key={`${item.municipality}-${item.department ?? ''}-${index}`}
                                 type="button"
-                                onMouseDown={(e) => { e.preventDefault(); handleCitySelect(s); }}
-                                style={{
-                                  width: '100%', padding: '10px 16px', border: 'none', textAlign: 'left',
-                                  background: 'transparent', cursor: 'pointer', display: 'flex',
-                                  alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                                  fontFamily: 'Montserrat, sans-serif',
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  selectMunicipality(item);
                                 }}
-                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(244,154,43,0.1)')}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                style={{
+                                  width: '100%',
+                                  padding: '10px 16px',
+                                  border: 'none',
+                                  textAlign: 'left',
+                                  background: 'transparent',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: 8,
+                                  fontFamily: 'Montserrat, sans-serif'
+                                }}
+                                onMouseEnter={(event) => {
+                                  event.currentTarget.style.background = 'rgba(244,154,43,0.1)';
+                                }}
+                                onMouseLeave={(event) => {
+                                  event.currentTarget.style.background = 'transparent';
+                                }}
                               >
                                 <span style={{ fontSize: 13, color: '#fff' }}>
-                                  {s.municipality}
-                                  {s.department && (
+                                  {item.municipality}
+                                  {item.department && (
                                     <span style={{ color: 'rgba(255,255,255,0.45)', marginLeft: 4 }}>
-                                      — {s.department}
+                                      — {item.department}
                                     </span>
                                   )}
                                 </span>
                                 <span style={{ fontSize: 11, color: '#F49A2B', whiteSpace: 'nowrap', fontWeight: 600 }}>
-                                  {s.region_name}
+                                  {item.region_name}
                                 </span>
                               </button>
                             ))}
@@ -1388,37 +1443,63 @@ export function SolarSimulator() {
                         </span>
                         <button
                           type="button"
-                          onClick={handleDetectLocation}
+                          onClick={detectLocation}
                           className="text-xs flex items-center gap-1 hover:underline shrink-0"
-                          style={{ color: 'rgba(244,154,43,0.7)', fontFamily: 'Montserrat, sans-serif', background: 'none', border: 'none', cursor: 'pointer' }}
+                          style={{
+                            color: 'rgba(244,154,43,0.7)',
+                            fontFamily: 'Montserrat, sans-serif',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
                         >
                           <MapPin className="w-3 h-3" />
                           Usar mi ubicación
                         </button>
                       </div>
                       {regionSuggestions.length > 0 && (
-                        <div style={{ background: 'rgba(244,154,43,0.08)', border: '1px solid rgba(244,154,43,0.3)', borderRadius: 8, padding: '10px 12px' }}>
-                          <p style={{ color: 'rgba(244,154,43,0.9)', fontSize: 12, fontFamily: 'Montserrat, sans-serif', marginBottom: 8, fontWeight: 600 }}>
+                        <div
+                          style={{
+                            background: 'rgba(244,154,43,0.08)',
+                            border: '1px solid rgba(244,154,43,0.3)',
+                            borderRadius: 8,
+                            padding: '10px 12px'
+                          }}
+                        >
+                          <p
+                            style={{
+                              color: 'rgba(244,154,43,0.9)',
+                              fontSize: 12,
+                              fontFamily: 'Montserrat, sans-serif',
+                              marginBottom: 8,
+                              fontWeight: 600
+                            }}
+                          >
                             Este municipio existe en varias regiones. Selecciona la correcta:
                           </p>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {regionSuggestions.map((s) => (
+                            {regionSuggestions.map((suggestion) => (
                               <button
-                                key={s.region_id}
+                                key={suggestion.region_id}
                                 type="button"
                                 onClick={() => {
-                                  setSelectedRegionId(s.region_id);
+                                  setRegionId(suggestion.region_id);
                                   setRegionSuggestions([]);
-                                  if (s.hsp_avg) setRegionHsp(s.hsp_avg);
-                                  if (s.tariff_cop_per_kwh) setTarifaEnergia(s.tariff_cop_per_kwh);
+                                  if (suggestion.hsp_avg) setSunHours(suggestion.hsp_avg);
+                                  if (suggestion.tariff_cop_per_kwh) setTarifaEnergia(suggestion.tariff_cop_per_kwh);
                                 }}
                                 style={{
-                                  background: 'rgba(244,154,43,0.15)', border: '1px solid rgba(244,154,43,0.4)',
-                                  borderRadius: 4, padding: '4px 10px', fontSize: 12, color: '#fff',
-                                  cursor: 'pointer', fontFamily: 'Montserrat, sans-serif',
+                                  background: 'rgba(244,154,43,0.15)',
+                                  border: '1px solid rgba(244,154,43,0.4)',
+                                  borderRadius: 4,
+                                  padding: '4px 10px',
+                                  fontSize: 12,
+                                  color: '#fff',
+                                  cursor: 'pointer',
+                                  fontFamily: 'Montserrat, sans-serif'
                                 }}
                               >
-                                {s.display} → {s.region_name}
+                                {suggestion.display} → {suggestion.region_name}
                               </button>
                             ))}
                           </div>
@@ -1470,7 +1551,7 @@ export function SolarSimulator() {
                   }}
                 >
                   <div className="flex items-center justify-center gap-2">
-                    {isSubmitting && <Loader className="w-5 h-5 animate-spin" />}
+                    {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}
                     <span>{isSubmitting ? 'Procesando solicitud...' : 'Enviar solicitud'}</span>
                   </div>
                 </button>

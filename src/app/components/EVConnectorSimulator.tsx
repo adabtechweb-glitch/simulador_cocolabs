@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import {
   Zap,
   ArrowRight,
@@ -65,6 +65,99 @@ function formatCOP(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+type VisibleBox = { top: number; left: number; width: number; height: number };
+
+function readVisibleBox(): VisibleBox {
+  const ownViewport = window.visualViewport;
+  const fallback: VisibleBox = {
+    top: ownViewport?.offsetTop ?? 0,
+    left: ownViewport?.offsetLeft ?? 0,
+    width: ownViewport?.width ?? window.innerWidth,
+    height: ownViewport?.height ?? window.innerHeight,
+  };
+
+  try {
+    const frame = window.frameElement as HTMLElement | null;
+    const parentWindow = window.parent;
+    if (!frame || !parentWindow || parentWindow === window) return clampToViewport(fallback);
+
+    const rect = frame.getBoundingClientRect();
+    const parentViewport = parentWindow.visualViewport;
+    const viewTop = parentViewport?.offsetTop ?? 0;
+    const viewLeft = parentViewport?.offsetLeft ?? 0;
+    const viewHeight = parentViewport?.height ?? parentWindow.innerHeight;
+    const viewWidth = parentViewport?.width ?? parentWindow.innerWidth;
+
+    const visibleTop = Math.max(rect.top, viewTop);
+    const visibleBottom = Math.min(rect.bottom, viewTop + viewHeight);
+    const visibleLeft = Math.max(rect.left, viewLeft);
+    const visibleRight = Math.min(rect.right, viewLeft + viewWidth);
+    const height = visibleBottom - visibleTop;
+    const width = visibleRight - visibleLeft;
+    if (height < 1 || width < 1) return clampToViewport(fallback);
+
+    return clampToViewport({
+      top: visibleTop - rect.top,
+      left: visibleLeft - rect.left,
+      width,
+      height,
+    });
+  } catch {
+    return clampToViewport(fallback);
+  }
+}
+
+function clampToViewport(box: VisibleBox): VisibleBox {
+  const limitH = document.documentElement.clientHeight || window.innerHeight;
+  const limitW = document.documentElement.clientWidth || window.innerWidth;
+  const top = Math.max(0, Math.min(box.top, Math.max(0, limitH - 160)));
+  const left = Math.max(0, Math.min(box.left, Math.max(0, limitW - 160)));
+  return {
+    top,
+    left,
+    width: Math.max(160, Math.min(box.width, limitW - left)),
+    height: Math.max(160, Math.min(box.height, limitH - top)),
+  };
+}
+
+function useVisibleFrame(active: boolean): VisibleBox {
+  const [box, setBox] = useState<VisibleBox>(readVisibleBox);
+
+  useLayoutEffect(() => {
+    if (!active) return;
+    const update = () => setBox(readVisibleBox());
+    update();
+
+    window.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+
+    let parentWindow: Window | null = null;
+    try {
+      if (window.parent && window.parent !== window) parentWindow = window.parent;
+    } catch {
+      parentWindow = null;
+    }
+
+    parentWindow?.addEventListener("resize", update);
+    parentWindow?.addEventListener("scroll", update, true);
+    parentWindow?.visualViewport?.addEventListener("resize", update);
+    parentWindow?.visualViewport?.addEventListener("scroll", update);
+
+    return () => {
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+      parentWindow?.removeEventListener("resize", update);
+      parentWindow?.removeEventListener("scroll", update, true);
+      parentWindow?.visualViewport?.removeEventListener("resize", update);
+      parentWindow?.visualViewport?.removeEventListener("scroll", update);
+    };
+  }, [active]);
+
+  return box;
 }
 
 export function EVConnectorSimulator() {
@@ -200,10 +293,63 @@ export function EVConnectorSimulator() {
     setIsSubmitting(false);
   };
 
+  useEffect(() => {
+    const root = document.getElementById("root");
+    if (!root) return;
+    const reportHeight = () => {
+      const height = Math.ceil(root.getBoundingClientRect().height);
+      if (height < 100) return;
+      try {
+        window.parent.postMessage({ type: "resize", height }, "*");
+      } catch {
+        // El simulador no está embebido.
+      }
+    };
+    reportHeight();
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(root);
+    const timer = window.setInterval(reportHeight, 800);
+    return () => {
+      observer.disconnect();
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    try {
+      window.parent.postMessage({ type: "SOLAR_SIM_CENTER_MODAL" }, "*");
+    } catch {
+      // Sin página padre, el modal se queda en el viewport del simulador.
+    }
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
+    };
+  }, [showModal]);
+
+  const visibleBox = useVisibleFrame(showModal);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(76);
+  const modalGutter = visibleBox.height < 700 ? 12 : 20;
+  const modalMaxHeight = Math.max(160, visibleBox.height - modalGutter * 2);
+  const formMaxHeight = Math.max(120, modalMaxHeight - headerHeight);
+
+  useLayoutEffect(() => {
+    if (!showModal || !headerRef.current) return;
+    setHeaderHeight(headerRef.current.offsetHeight);
+  }, [showModal, visibleBox.height]);
+
   return (
-    <div className="min-h-screen bg-[#F0F6FA] font-[Manrope]">
+    <div className="bg-black font-[Manrope]">
       {/* ── Header ── */}
-      <header className="bg-[#0C2638] shadow-lg">
+      <header className="bg-black">
         <div className="max-w-4xl mx-auto px-5 py-4 flex items-center justify-between">
           <AdabTechLogo className="h-9 w-auto" />
           <div className="flex items-center gap-2 bg-[#1AB8D7]/15 border border-[#1AB8D7]/30 rounded-full px-4 py-1.5">
@@ -216,43 +362,13 @@ export function EVConnectorSimulator() {
       </header>
 
       {/* ── Hero ── */}
-      <section className="bg-[#0C2638] relative overflow-hidden">
-        {/* aurora borealis background */}
-        {/* banda principal — verde esmeralda a cian, esquina superior derecha */}
-        <div
-          className="absolute -top-20 -right-40 w-[600px] h-56 pointer-events-none"
-          style={{
-            background: "radial-gradient(ellipse at center, rgba(0,230,118,0.18) 0%, rgba(26,184,215,0.12) 45%, rgba(100,60,200,0.06) 75%, transparent 100%)",
-            filter: "blur(48px)",
-            transform: "rotate(-15deg)",
-          }}
-        />
-        {/* banda secundaria — púrpura a magenta, izquierda medio */}
-        <div
-          className="absolute top-1/3 -left-32 w-72 h-40 pointer-events-none"
-          style={{
-            background: "radial-gradient(ellipse at center, rgba(123,47,190,0.2) 0%, rgba(0,200,150,0.1) 50%, transparent 100%)",
-            filter: "blur(40px)",
-            transform: "rotate(10deg)",
-          }}
-        />
-        {/* trazo fino — cian a verde, diagonal centro */}
-        <div
-          className="absolute top-1/2 left-1/3 w-[340px] h-12 pointer-events-none"
-          style={{
-            background: "linear-gradient(90deg, transparent, rgba(0,255,135,0.12), rgba(26,184,215,0.14), transparent)",
-            filter: "blur(20px)",
-            transform: "rotate(-8deg)",
-          }}
-        />
-        {/* resplandor profundo — azul índigo, parte inferior */}
-        <div
-          className="absolute -bottom-10 left-1/4 w-80 h-40 pointer-events-none"
-          style={{
-            background: "radial-gradient(ellipse at center, rgba(60,80,220,0.15) 0%, rgba(0,200,180,0.08) 55%, transparent 100%)",
-            filter: "blur(50px)",
-          }}
-        />
+      <section className="bg-black relative overflow-hidden">
+        <div className="absolute inset-0 opacity-20 pointer-events-none">
+          <div
+            className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full blur-3xl"
+            style={{ background: "radial-gradient(circle, rgba(26, 184, 215, 0.25) 0%, transparent 70%)" }}
+          />
+        </div>
         {/* punto cálido sutil — naranja muy tenue */}
         <div
           className="absolute bottom-8 right-12 w-20 h-20 pointer-events-none"
@@ -362,17 +478,17 @@ export function EVConnectorSimulator() {
 
       {/* ── Main card ── */}
       <div className="max-w-4xl mx-auto px-4 -mt-6 pb-8">
-        <div className="bg-white rounded-3xl shadow-2xl shadow-[#0C2638]/10 border border-white/80 overflow-hidden">
+        <div className="rounded-3xl border border-white/10 bg-[rgba(30,30,30,0.6)] backdrop-blur-md overflow-hidden">
           <div className="md:flex md:flex-row">
 
             {/* ── Columna izquierda: Input ── */}
             <div className="p-8 md:p-10 flex flex-col justify-between md:flex-1">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <div className="w-10 h-10 rounded-xl bg-[#0C2638] flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#1AB8D7]/15 flex items-center justify-center flex-shrink-0">
                     <Ruler className="w-4 h-4 text-[#1AB8D7]" />
                   </div>
-                  <h2 className="text-[#0C2638] text-lg font-extrabold leading-snug">
+                  <h2 className="text-white text-lg font-extrabold leading-snug">
                     ¿Cuántos metros necesita la instalación?
                   </h2>
                 </div>
@@ -397,7 +513,7 @@ export function EVConnectorSimulator() {
                       placeholder="0"
                       min="0"
                       step="1"
-                      className="w-32 h-20 text-center text-4xl font-extrabold text-[#0C2638] border-2 border-slate-200 rounded-xl focus:border-[#1AB8D7] focus:outline-none focus:ring-4 focus:ring-[#1AB8D7]/20 transition-all bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      className="w-32 h-20 text-center text-4xl font-extrabold text-white border-2 border-white/10 rounded-xl focus:border-[#1AB8D7] focus:outline-none focus:ring-4 focus:ring-[#1AB8D7]/20 transition-all bg-black/40 placeholder:text-white/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     <span className="text-slate-400 text-xs font-semibold tracking-wide">metros lineales</span>
                   </div>
@@ -420,11 +536,11 @@ export function EVConnectorSimulator() {
                           onClick={() => setMetros(String(m))}
                           className={`flex flex-col items-center py-2 px-1 rounded-xl border-2 transition-all active:scale-95 ${
                             active
-                              ? "bg-[#0C2638] text-white border-[#0C2638] shadow-md"
-                              : "border-slate-200 text-slate-600 hover:border-[#1AB8D7] hover:text-[#1AB8D7] bg-white"
+                              ? "bg-[#1AB8D7]/15 text-white border-[#1AB8D7]"
+                              : "border-white/15 text-white/70 hover:border-[#1AB8D7] hover:text-[#1AB8D7] bg-transparent"
                           }`}
                         >
-                          <span className={`text-[13px] font-bold ${active ? "text-[#1AB8D7]" : "text-[#1AB8D7]/70"}`}>
+                          <span className={`text-[13px] font-bold ${active ? "text-[#1AB8D7]" : "text-white"}`}>
                             {m} m
                           </span>
                         </button>
@@ -437,7 +553,7 @@ export function EVConnectorSimulator() {
             </div>
 
             {/* Divisor vertical desktop */}
-            <div className="hidden md:block w-px bg-gradient-to-b from-transparent via-slate-200 to-transparent" />
+            <div className="hidden md:block w-px bg-gradient-to-b from-transparent via-white/10 to-transparent" />
 
             {/* ── Columna derecha: Resultado ── */}
             <div className="flex flex-col justify-center md:p-10 md:flex-1">
@@ -469,7 +585,7 @@ export function EVConnectorSimulator() {
                             {hasQuote ? formatCOP(quote.total_price) : "—"}
                           </div>
                           <p className="text-white/40 text-xs mb-6">
-                            {metrosNum} metro{metrosNum !== 1 ? "s" : ""} · IVA no incluido
+                            {metrosNum} metro{metrosNum !== 1 ? "s" : ""} · IVA incluido
                             {isLoading ? " · Calculando…" : ""}
                           </p>
                         </>
@@ -489,10 +605,10 @@ export function EVConnectorSimulator() {
                 </div>
               ) : (
                 <div className="hidden md:flex flex-col items-center justify-center h-full text-center px-10 py-16">
-                  <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-                    <Zap className="w-8 h-8 text-slate-300" strokeWidth={1.5} />
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                    <Zap className="w-8 h-8 text-white/40" strokeWidth={1.5} />
                   </div>
-                  <p className="text-slate-300 text-sm font-medium leading-relaxed">
+                  <p className="text-white/40 text-sm font-medium leading-relaxed">
                     Ingresa los metros o selecciona el tipo de parqueadero para ver tu estimado al instante
                   </p>
                 </div>
@@ -511,13 +627,28 @@ export function EVConnectorSimulator() {
       {/* ── Modal de contacto ── */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) handleModalClose(); }}
+          className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm"
+          onClick={handleModalClose}
         >
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden">
+          <div
+            className="absolute flex items-center justify-center overflow-hidden"
+            style={{
+              top: visibleBox.top,
+              left: visibleBox.left,
+              width: visibleBox.width,
+              height: visibleBox.height,
+              paddingLeft: modalGutter,
+              paddingRight: modalGutter,
+            }}
+          >
+            <div
+              className="bg-white w-full max-w-sm rounded-3xl shadow-2xl flex flex-col overflow-hidden min-h-0"
+              style={{ maxHeight: modalMaxHeight }}
+              onClick={(e) => e.stopPropagation()}
+            >
 
             {/* Header */}
-            <div className="bg-[#0C2638] px-6 py-5 flex items-center justify-between">
+            <div ref={headerRef} className="bg-[#0C2638] px-6 py-5 flex items-center justify-between shrink-0">
               <div>
                 <p className="text-[#1AB8D7] text-xs font-bold uppercase tracking-widest mb-0.5">
                   Adab.Tech EV
@@ -532,6 +663,10 @@ export function EVConnectorSimulator() {
               </button>
             </div>
 
+            <div
+              className="ev-modal-scroll min-h-0 overflow-y-auto overscroll-contain"
+              style={{ maxHeight: formMaxHeight }}
+            >
             {modalSent ? (
               /* ── Éxito ── */
               <div className="p-10 text-center">
@@ -710,11 +845,26 @@ export function EVConnectorSimulator() {
                 </button>
 
                 <p className="text-center text-slate-400 text-xs">
-                  Tus datos están protegidos y no serán compartidos.
+                Tus datos están protegidos de acuerdo a Ley de protección de datos personales en Colombia 1581 de 2012.
                 </p>
               </form>
             )}
+            </div>
+            </div>
           </div>
+          <style>{`
+            .ev-modal-scroll {
+              scrollbar-width: thin;
+              scrollbar-color: rgba(12, 38, 56, 0.45) transparent;
+            }
+            .ev-modal-scroll::-webkit-scrollbar {
+              width: 8px;
+            }
+            .ev-modal-scroll::-webkit-scrollbar-thumb {
+              background: rgba(12, 38, 56, 0.35);
+              border-radius: 999px;
+            }
+          `}</style>
         </div>
       )}
     </div>

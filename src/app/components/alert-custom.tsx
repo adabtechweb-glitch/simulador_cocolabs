@@ -14,6 +14,7 @@ export const showSolarAlert = async (icon: SweetAlertIcon, title: string, messag
     color: '#ffffff',
     // -------------------------------------
     customClass: {
+      container: 'solar-alert-container',
       popup: 'solar-popup',
       title: 'solar-title',
       htmlContainer: 'solar-content',
