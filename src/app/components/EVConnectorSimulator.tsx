@@ -14,24 +14,66 @@ import {
   Loader2,
 } from "lucide-react";
 import { simulateQuotation, createQuotationFromSimulator, type EVSimulateResponse } from "@/app/lib/evApi";
-import { useVisibleFrame } from "@/app/hooks/useVisibleFrame";
+import { useVisibleFrame, isPhoneViewport } from "@/app/hooks/useVisibleFrame";
 
 type LocationMode = "idle" | "detecting" | "detected" | "manual";
 
+function cleanPlaceName(value: string): string {
+  return (value || "")
+    .replace(/^per[ií]metro\s+urbano\s+(de\s+)?/i, "")
+    .replace(/^zona\s+urbana\s+(de\s+)?/i, "")
+    .replace(/^area\s+metropolitana\s+(de\s+)?/i, "")
+    .replace(/^área\s+metropolitana\s+(de\s+)?/i, "")
+    .replace(/^municipio\s+de\s+/i, "")
+    .replace(/^distrito\s+de\s+/i, "")
+    .replace(/\s+ciudad$/i, "")
+    .trim();
+}
+
+function normalizeKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/** Ciudad/municipio + departamento; sin calle ni barrio. Solo EV. */
 async function reverseGeocode(lat: number, lon: number): Promise<string> {
   const res = await fetch(
     `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=es`
   );
   const data = await res.json();
   const addr = data.address || {};
-  const city = addr.city || addr.town || addr.municipality || addr.county || "";
-  const parts = [
-    addr.road,
-    addr.neighbourhood || addr.suburb || addr.quarter,
-    city,
-    addr.state,
-  ].filter(Boolean);
-  return (parts as string[]).join(", ") || data.display_name || `${lat}, ${lon}`;
+
+  const place =
+    [
+      addr.city,
+      addr.town,
+      addr.municipality,
+      addr.village,
+      addr.county,
+    ]
+      .map((part: string | undefined) => cleanPlaceName((part || "").trim()))
+      .filter(Boolean)[0] || "";
+
+  let department = cleanPlaceName((addr.state || addr.region || addr.state_district || "").trim());
+
+  if (place && department) {
+    const placeKey = normalizeKey(place);
+    // "Bogotá, Distrito Capital" → quitar el segmento que repite el lugar
+    department = department
+      .split(",")
+      .map((segment) => segment.trim())
+      .filter((segment) => segment && normalizeKey(segment) !== placeKey)
+      .join(", ");
+    if (normalizeKey(department) === placeKey) {
+      department = "";
+    }
+  }
+
+  const label = [place, department].filter(Boolean).join(", ");
+  return label || `${lat}, ${lon}`;
 }
 
 function AdabTechLogo({ className }: { className?: string }) {
@@ -245,6 +287,7 @@ export function EVConnectorSimulator() {
   const visibleBox = useVisibleFrame(showModal);
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(76);
+  const isPhone = isPhoneViewport();
   const modalGutter = visibleBox.height < 700 ? 12 : 20;
   const modalMaxHeight = Math.max(160, visibleBox.height - modalGutter * 2);
   const formMaxHeight = Math.max(120, modalMaxHeight - headerHeight);
@@ -253,6 +296,21 @@ export function EVConnectorSimulator() {
     if (!showModal || !headerRef.current) return;
     setHeaderHeight(headerRef.current.offsetHeight);
   }, [showModal, visibleBox.height]);
+
+  useEffect(() => {
+    if (!showModal || !isPhone) return;
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName;
+      if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") return;
+      window.setTimeout(() => {
+        target.scrollIntoView({ block: "center", behavior: "smooth", inline: "nearest" });
+      }, 120);
+    };
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, [showModal, isPhone, visibleBox.height]);
 
   return (
     <div className="bg-black font-[Manrope]">
@@ -539,7 +597,9 @@ export function EVConnectorSimulator() {
           onClick={handleModalClose}
         >
           <div
-            className="absolute flex items-center justify-center overflow-hidden"
+            className={`absolute flex justify-center overflow-hidden ${
+              isPhone ? "items-start" : "items-center"
+            }`}
             style={{
               top: visibleBox.top,
               left: visibleBox.left,
@@ -547,6 +607,7 @@ export function EVConnectorSimulator() {
               height: visibleBox.height,
               paddingLeft: modalGutter,
               paddingRight: modalGutter,
+              paddingTop: isPhone ? modalGutter : 0,
             }}
           >
             <div
@@ -665,7 +726,7 @@ export function EVConnectorSimulator() {
                       <input
                         type="text"
                         required
-                        placeholder="Ej: Calle 45 #12-34, Bogotá"
+                        placeholder="Ej: Bogotá, Distrito Capital"
                         value={ubicacion}
                         onChange={(e) => setUbicacion(e.target.value)}
                         className={`w-full px-4 py-4 rounded-xl border-2 text-[#0C2638] text-base focus:border-[#1AB8D7] focus:outline-none focus:ring-4 focus:ring-[#1AB8D7]/15 transition-all bg-slate-50 placeholder:text-slate-400 ${

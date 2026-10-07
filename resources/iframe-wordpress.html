@@ -52,6 +52,20 @@
                 }
             }
 
+            function reportParentViewport() {
+                try {
+                    const vv = window.visualViewport;
+                    const height = vv ? vv.height : window.innerHeight;
+                    if (!iframe.contentWindow) return;
+                    iframe.contentWindow.postMessage(
+                        { type: 'ADAB_PARENT_VIEWPORT', height: height },
+                        '*'
+                    );
+                } catch (err) {
+                    // Cross-origin o iframe aún no listo.
+                }
+            }
+
             window.addEventListener('message', function(e) {
                 // 1. Redimensionamiento dinámico enviado desde React
                 if (e.data && e.data.type === 'resize') {
@@ -63,7 +77,9 @@
                     const rect = iframe.getBoundingClientRect();
                     const iframeTop = rect.top + window.pageYOffset;
                     const iframeHeight = rect.height;
-                    const viewportHeight = window.innerHeight;
+                    const viewportHeight = (window.visualViewport && window.visualViewport.height)
+                        ? window.visualViewport.height
+                        : window.innerHeight;
 
                     // Cálculo: Posición del iframe + mitad de su altura - mitad de la pantalla visible
                     const centerPosition = iframeTop + (iframeHeight / 2) - (viewportHeight / 2);
@@ -72,6 +88,7 @@
                         top: centerPosition,
                         behavior: 'smooth'
                     });
+                    reportParentViewport();
                 }
             }, false);
 
@@ -90,10 +107,18 @@
 
             iframe.onload = () => {
                 setTimeout(checkLayout, 300);
+                setTimeout(reportParentViewport, 350);
             };
 
             window.addEventListener('resize', checkLayout);
+            window.addEventListener('resize', reportParentViewport);
+            window.addEventListener('scroll', reportParentViewport, true);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', reportParentViewport);
+                window.visualViewport.addEventListener('scroll', reportParentViewport);
+            }
             setInterval(checkLayout, 1500);
+            setInterval(reportParentViewport, 1500);
         })();
     </script>
 </div>
