@@ -3,8 +3,6 @@ import { useState, useLayoutEffect } from 'react';
 export type VisibleBox = { top: number; left: number; width: number; height: number };
 
 const PHONE_MAX_WIDTH = 767;
-const AUTOFILL_BAR_PX = 64;
-const KEYBOARD_RESERVE_RATIO = 0.42;
 /** Mensaje del snippet de WordPress con la altura visible del padre. */
 export const PARENT_VIEWPORT_MESSAGE = 'ADAB_PARENT_VIEWPORT';
 
@@ -14,37 +12,9 @@ export function isPhoneViewport(): boolean {
   return window.innerWidth <= PHONE_MAX_WIDTH;
 }
 
-function isTextFieldFocused(): boolean {
-  const el = document.activeElement;
-  if (!el) return false;
-  const tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-}
-
-function applyPhoneKeyboardReserve(box: VisibleBox, fieldFocused: boolean): VisibleBox {
-  if (!fieldFocused) return box;
-
-  let height = Math.max(160, box.height - AUTOFILL_BAR_PX);
-  const layoutH = window.innerHeight;
-  const ownH = window.visualViewport?.height ?? layoutH;
-  const parentH = parentReportedHeight;
-  const viewportDidShrink =
-    ownH / layoutH <= 0.85 || (parentH != null && parentH / layoutH <= 0.85);
-
-  if (!viewportDidShrink) {
-    height = Math.max(
-      160,
-      Math.min(height, layoutH * (1 - KEYBOARD_RESERVE_RATIO) - AUTOFILL_BAR_PX)
-    );
-  }
-
-  return { ...box, height };
-}
-
 export function readVisibleBox(): VisibleBox {
   const ownViewport = window.visualViewport;
   const phone = isPhoneViewport();
-  const fieldFocused = phone && isTextFieldFocused();
 
   let fallbackHeight = ownViewport?.height ?? window.innerHeight;
   if (phone && parentReportedHeight != null) {
@@ -62,13 +32,13 @@ export function readVisibleBox(): VisibleBox {
     const frame = window.frameElement as HTMLElement | null;
     const parentWindow = window.parent;
     if (!frame || !parentWindow || parentWindow === window) {
-      return clampToViewport(applyPhoneKeyboardReserve(fallback, fieldFocused));
+      return clampToViewport(fallback);
     }
 
     const rect = frame.getBoundingClientRect();
     const parentViewport = parentWindow.visualViewport;
 
-    // Tablet / desktop: comportamiento actual (centrado sin teclado).
+    // Tablet / desktop: recorte con offset del visualViewport.
     if (!phone) {
       const viewTop = parentViewport?.offsetTop ?? 0;
       const viewLeft = parentViewport?.offsetLeft ?? 0;
@@ -102,26 +72,9 @@ export function readVisibleBox(): VisibleBox {
     const visibleBottom = Math.min(rect.bottom, viewHeight);
     const visibleLeft = Math.max(rect.left, 0);
     const visibleRight = Math.min(rect.right, viewWidth);
-    let height = visibleBottom - visibleTop;
+    const height = visibleBottom - visibleTop;
     const width = visibleRight - visibleLeft;
-    if (height < 1 || width < 1) {
-      return clampToViewport(applyPhoneKeyboardReserve(fallback, fieldFocused));
-    }
-
-    if (fieldFocused) {
-      height = Math.max(160, height - AUTOFILL_BAR_PX);
-      const layoutH = parentWindow.innerHeight;
-      const measured = parentViewport?.height ?? layoutH;
-      const parentDidShrink =
-        measured / layoutH <= 0.85 ||
-        (parentReportedHeight != null && parentReportedHeight / layoutH <= 0.85);
-      if (!parentDidShrink) {
-        height = Math.max(
-          160,
-          Math.min(height, layoutH * (1 - KEYBOARD_RESERVE_RATIO) - AUTOFILL_BAR_PX)
-        );
-      }
-    }
+    if (height < 1 || width < 1) return clampToViewport(fallback);
 
     return clampToViewport({
       top: visibleTop - rect.top,
@@ -130,7 +83,7 @@ export function readVisibleBox(): VisibleBox {
       height,
     });
   } catch {
-    return clampToViewport(applyPhoneKeyboardReserve(fallback, fieldFocused));
+    return clampToViewport(fallback);
   }
 }
 
@@ -164,8 +117,6 @@ export function useVisibleFrame(active: boolean): VisibleBox {
     };
 
     window.addEventListener('resize', update);
-    window.addEventListener('focusin', update);
-    window.addEventListener('focusout', update);
     window.addEventListener('message', onParentMessage);
     window.visualViewport?.addEventListener('resize', update);
     window.visualViewport?.addEventListener('scroll', update);
@@ -184,8 +135,6 @@ export function useVisibleFrame(active: boolean): VisibleBox {
 
     return () => {
       window.removeEventListener('resize', update);
-      window.removeEventListener('focusin', update);
-      window.removeEventListener('focusout', update);
       window.removeEventListener('message', onParentMessage);
       window.visualViewport?.removeEventListener('resize', update);
       window.visualViewport?.removeEventListener('scroll', update);

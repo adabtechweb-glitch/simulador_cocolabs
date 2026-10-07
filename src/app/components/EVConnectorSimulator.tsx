@@ -14,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { simulateQuotation, createQuotationFromSimulator, type EVSimulateResponse } from "@/app/lib/evApi";
+import { LiveQuoteCardShell } from "./LiveQuoteCardShell";
 import { useVisibleFrame, isPhoneViewport } from "@/app/hooks/useVisibleFrame";
 
 type LocationMode = "idle" | "detecting" | "detected" | "manual";
@@ -297,21 +298,6 @@ export function EVConnectorSimulator() {
     setHeaderHeight(headerRef.current.offsetHeight);
   }, [showModal, visibleBox.height]);
 
-  useEffect(() => {
-    if (!showModal || !isPhone) return;
-    const onFocusIn = (event: FocusEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-      const tag = target.tagName;
-      if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") return;
-      window.setTimeout(() => {
-        target.scrollIntoView({ block: "center", behavior: "smooth", inline: "nearest" });
-      }, 120);
-    };
-    document.addEventListener("focusin", onFocusIn);
-    return () => document.removeEventListener("focusin", onFocusIn);
-  }, [showModal, isPhone, visibleBox.height]);
-
   return (
     <div className="bg-black font-[Manrope]">
       {/* ── Header ── */}
@@ -524,13 +510,11 @@ export function EVConnectorSimulator() {
             {/* ── Columna derecha: Resultado ── */}
             <div className="flex flex-col justify-center md:p-10 md:flex-1">
               {isValid ? (
-                <div className="mx-8 mb-8 md:m-0">
-                  <div className="rounded-2xl bg-gradient-to-br from-[#0C2638] via-[#0d3550] to-[#0e3d5e] p-8 text-center shadow-xl shadow-[#0C2638]/20 relative overflow-hidden">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#1AB8D7]/10 rounded-full blur-2xl pointer-events-none" />
-                    <div className="relative">
+                <div className="mx-4 mb-8 md:m-0">
+                  <LiveQuoteCardShell glowClassName="bg-[#1AB8D7]/10">
                       <div className="flex items-center justify-center gap-2 mb-4">
-                        <span className="w-2 h-2 rounded-full bg-[#1AB8D7] animate-pulse" />
-                        <span className="text-[#1AB8D7] text-xs font-bold uppercase tracking-widest">
+                        <span className="w-2 h-2 rounded-full bg-[#1AB8D7] animate-pulse shrink-0" />
+                        <span className="text-[#1AB8D7] text-xs font-bold uppercase tracking-widest text-balance">
                           Cotización en vivo · Adab.Tech EV
                         </span>
                       </div>
@@ -544,9 +528,10 @@ export function EVConnectorSimulator() {
                       ) : (
                         <>
                           <div
-                            className={`text-white text-4xl font-extrabold mb-1 tracking-tight transition-opacity ${
+                            className={`text-white font-extrabold mb-1 tracking-tight transition-opacity ${
                               isLoading && !hasQuote ? "opacity-40" : isLoading ? "opacity-60" : "opacity-100"
                             }`}
+                            style={{ fontSize: "clamp(1.5rem, 8vw, 2.25rem)" }}
                           >
                             {hasQuote ? formatCOP(quote.total_price) : "—"}
                           </div>
@@ -566,8 +551,7 @@ export function EVConnectorSimulator() {
                         Solicitar mi cotización
                       </button>
                       <p className="text-white/30 text-xs mt-3">Sin compromiso · Te contactamos hoy</p>
-                    </div>
-                  </div>
+                  </LiveQuoteCardShell>
                 </div>
               ) : (
                 <div className="hidden md:flex flex-col items-center justify-center h-full text-center px-10 py-16">
@@ -597,8 +581,10 @@ export function EVConnectorSimulator() {
           onClick={handleModalClose}
         >
           <div
-            className={`absolute flex justify-center overflow-hidden ${
-              isPhone ? "items-start" : "items-center"
+            className={`absolute flex justify-center ${
+              isPhone
+                ? "items-start overflow-y-auto overscroll-contain"
+                : "items-center overflow-hidden"
             }`}
             style={{
               top: visibleBox.top,
@@ -608,11 +594,12 @@ export function EVConnectorSimulator() {
               paddingLeft: modalGutter,
               paddingRight: modalGutter,
               paddingTop: isPhone ? modalGutter : 0,
+              paddingBottom: isPhone ? modalGutter : 0,
             }}
           >
             <div
               className="bg-white w-full max-w-sm rounded-3xl shadow-2xl flex flex-col overflow-hidden min-h-0"
-              style={{ maxHeight: modalMaxHeight }}
+              style={isPhone ? undefined : { maxHeight: modalMaxHeight }}
               onClick={(e) => e.stopPropagation()}
             >
 
@@ -633,8 +620,10 @@ export function EVConnectorSimulator() {
             </div>
 
             <div
-              className="ev-modal-scroll min-h-0 overflow-y-auto overscroll-contain"
-              style={{ maxHeight: formMaxHeight }}
+              className={`ev-modal-scroll min-h-0 ${
+                isPhone ? "" : "overflow-y-auto overscroll-contain"
+              }`}
+              style={isPhone ? undefined : { maxHeight: formMaxHeight }}
             >
             {modalSent ? (
               /* ── Éxito ── */
