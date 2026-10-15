@@ -12,6 +12,7 @@ import {
   TrendingDown,
   MapPin,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { simulateQuotation, createQuotationFromSimulator, type EVSimulateResponse } from "@/app/lib/evApi";
 import { LiveQuoteCardShell } from "./LiveQuoteCardShell";
@@ -550,7 +551,7 @@ export function EVConnectorSimulator() {
                         <ArrowRight className="w-5 h-5" />
                         Solicitar mi cotización
                       </button>
-                      <p className="text-white/30 text-xs mt-3">Sin compromiso · Te contactamos hoy</p>
+                      <p className="text-white/30 text-xs mt-3">La cotización te llega al instante</p>
                   </LiveQuoteCardShell>
                 </div>
               ) : (
@@ -570,7 +571,7 @@ export function EVConnectorSimulator() {
 
         {/* footer note */}
         <p className="text-center text-slate-400 text-xs mt-4 leading-relaxed max-w-sm mx-auto">
-          Los precios son estimativos. Un técnico de Adab.Tech confirmará el valor exacto previa visita de diagnóstico.
+          Los precios son estimativos. Un técnico de AdabTech confirmará el valor exacto previa visita de diagnóstico.
         </p>
       </div>
 
@@ -802,9 +803,23 @@ export function EVConnectorSimulator() {
                   {isSubmitting ? "Enviando…" : "Enviar"}
                 </button>
 
-                <p className="text-center text-slate-400 text-xs">
-                Tus datos están protegidos de acuerdo a Ley de protección de datos personales en Colombia 1581 de 2012.
-                </p>
+                <div className="text-center space-y-2">
+                    <p className="text-slate-400 text-xs text-center">
+                      <Lock className="w-3.5 h-3.5 inline-block align-text-bottom mr-1.5 shrink-0" strokeWidth={2} />
+                      Al enviar este formulario, aceptas nuestra{' '}
+                      <a
+                        href={`${window.location.origin}/politica-de-privacidad`}
+                        target="__blank"
+                        rel="noopener noreferrer"
+                        className="text-[#F49A2B] font-semibold hover:underline"
+                      >
+                        Política de Privacidad
+                      </a>
+                    </p>
+                    <p className="text-slate-400 text-xs inline-flex items-center justify-center gap-1.5">
+                      Tus datos están protegidos.
+                    </p>
+                  </div>
               </form>
             )}
             </div>

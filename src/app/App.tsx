@@ -5,8 +5,13 @@ import { Zap, Sun } from 'lucide-react';
 
 type Tab = 'solar' | 'ev';
 
+function tabFromSearch(): Tab {
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  return tab === 'ev' || tab === 'solar' ? tab : 'solar';
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('solar');
+  const [activeTab, setActiveTab] = useState<Tab>(tabFromSearch);
 
   return (
     <div className="bg-black">

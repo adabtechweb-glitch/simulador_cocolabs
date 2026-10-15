@@ -42,9 +42,47 @@
         (function() {
             const iframe = document.getElementById('iframe-solar-sim');
             const currentDomain = window.location.origin;
+            const simulatorPath = "/assets/solar_simulator.html";
+            let appliedTab = null;
 
-            // Carga del archivo generado por el build de React
-            iframe.src = currentDomain + "/assets/solar_simulator.html";
+            function tabFromHash() {
+                const hash = window.location.hash;
+                if (hash === '#order-ev') return 'ev';
+                if (hash === '#order-solar') return 'solar';
+                return '';
+            }
+
+            function applyHashTab() {
+                const tab = tabFromHash();
+                if (tab !== appliedTab) {
+                    appliedTab = tab;
+                    iframe.src = currentDomain + simulatorPath + (tab ? '?tab=' + tab : '');
+                }
+            }
+
+            // Después del load, para no caer en la franja blanca de arriba.
+            function scrollToOrderSection() {
+                const hash = window.location.hash;
+                if (hash !== '#order-ev' && hash !== '#order-solar') return;
+                const target = document.getElementById(hash.slice(1));
+                if (!target) return;
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            applyHashTab();
+
+            if (document.readyState === 'complete') {
+                window.requestAnimationFrame(scrollToOrderSection);
+            } else {
+                window.addEventListener('load', function () {
+                    window.requestAnimationFrame(scrollToOrderSection);
+                }, { once: true });
+            }
+
+            window.addEventListener('hashchange', function () {
+                applyHashTab();
+                scrollToOrderSection();
+            });
 
             function syncFrame(h) {
                 if (h && h > 100) {

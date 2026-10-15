@@ -914,7 +914,7 @@ export function SolarSimulator() {
                       <ArrowRight className="w-5 h-5" />
                       Solicitar mi cotización
                     </button>
-                    <p className="text-white/30 text-xs mt-3">Sin compromiso · Te contactamos hoy</p>
+                    <p className="text-white/30 text-xs mt-3">La cotización te llega al instante</p>
                 </LiveQuoteCardShell>
               </div>
             </div>
@@ -922,7 +922,7 @@ export function SolarSimulator() {
         </div>
 
         <p className="text-center text-slate-400 text-xs mt-4 leading-relaxed max-w-sm mx-auto">
-          Los valores son estimativos. Un especialista Adab.Tech confirmará el sistema ideal en una visita gratuita.
+        Los precios son estimativos. Un especialista en energía solar de AdabTech confirmará el sistema ideal para ti previa reunión de diagnóstico.
         </p>
       </div>
 
@@ -1330,8 +1330,7 @@ export function SolarSimulator() {
                       </span>
                     </p>
                     <p className="text-slate-400 text-xs inline-flex items-center justify-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
-                      Tus datos están protegidos y no serán compartidos con terceros
+                      Tus datos están protegidos.
                     </p>
                   </div>
                 </form>
