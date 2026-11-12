@@ -1,3 +1,5 @@
+import { t } from '@/i18n';
+
 export type EVSimulateResponse = {
   total_price: number;
   advance_payment: number;
@@ -46,7 +48,7 @@ function getEvConfig() {
   const simulatorKey = import.meta.env.VITE_EV_SIMULATOR_KEY as string | undefined;
 
   if (!baseUrl || !simulatorId || !simulatorKey) {
-    throw new EVApiError('Falta configuración EV (VITE_EV_*).', 0);
+    throw new EVApiError(t('evApi.missingConfig'), 0);
   }
 
   return {
@@ -78,7 +80,7 @@ async function evFetch(
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw err;
     }
-    throw new EVApiError('No se pudo conectar con el servicio de cotización.', 0);
+    throw new EVApiError(t('evApi.connection'), 0);
   }
 }
 
@@ -87,7 +89,7 @@ export async function simulateQuotation(
   signal?: AbortSignal
 ): Promise<EVSimulateResponse> {
   if (!(linearMeters > 0)) {
-    throw new EVApiError('linear_meters debe ser mayor que 0.', 400);
+    throw new EVApiError(t('evApi.metersPositive'), 400);
   }
 
   const { simulatorId } = getEvConfig();
@@ -102,12 +104,12 @@ export async function simulateQuotation(
 
   if (!response.ok) {
     const messages: Record<number, string> = {
-      400: 'Parámetros de simulación inválidos.',
-      401: 'No autorizado para simular cotizaciones.',
-      404: 'Simulador EV no encontrado.',
+      400: t('evApi.invalidParams'),
+      401: t('evApi.unauthorizedSimulate'),
+      404: t('evApi.simulatorNotFound'),
     };
     throw new EVApiError(
-      messages[response.status] ?? `Error al simular cotización (${response.status}).`,
+      messages[response.status] ?? t('evApi.simulateStatus', { status: response.status }),
       response.status
     );
   }
@@ -125,16 +127,16 @@ export async function createQuotationFromSimulator(
   const clientPhone = input.clientPhone?.replace(/\s+/g, '').trim();
 
   if (!(input.linearMeters > 0)) {
-    throw new EVApiError('linear_meters debe ser mayor que 0.', 400);
+    throw new EVApiError(t('evApi.metersPositive'), 400);
   }
   if (!clientName) {
-    throw new EVApiError('El nombre es obligatorio.', 400);
+    throw new EVApiError(t('evApi.nameRequired'), 400);
   }
   if (!location) {
-    throw new EVApiError('La ubicación es obligatoria.', 400);
+    throw new EVApiError(t('evApi.locationRequired'), 400);
   }
   if (!clientEmail && !clientPhone) {
-    throw new EVApiError('Debes indicar un correo o un WhatsApp.', 400);
+    throw new EVApiError(t('evApi.contactRequired'), 400);
   }
 
   const { simulatorId } = getEvConfig();
@@ -152,13 +154,13 @@ export async function createQuotationFromSimulator(
 
   if (!response.ok) {
     const messages: Record<number, string> = {
-      400: 'No pudimos crear la cotización. Revisa los datos e intenta de nuevo.',
-      401: 'No autorizado para enviar cotizaciones.',
-      404: 'Simulador EV no encontrado.',
-      500: 'Error al enviar la cotización. Intenta de nuevo en unos minutos.',
+      400: t('evApi.createBadRequest'),
+      401: t('evApi.unauthorizedCreate'),
+      404: t('evApi.simulatorNotFound'),
+      500: t('evApi.createServer'),
     };
     throw new EVApiError(
-      messages[response.status] ?? `Error al crear cotización (${response.status}).`,
+      messages[response.status] ?? t('evApi.createStatus', { status: response.status }),
       response.status
     );
   }

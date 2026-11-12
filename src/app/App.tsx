@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SolarSimulator } from '@/app/components/SolarSimulator';
 import { EVConnectorSimulator } from '@/app/components/EVConnectorSimulator';
 import { Zap, Sun } from 'lucide-react';
+import { t } from '@/i18n';
 
 type Tab = 'solar' | 'ev';
 
@@ -27,7 +28,7 @@ export default function App() {
             }`}
           >
             <Sun className="w-4 h-4" />
-            Solar
+            {t('tabs.solar')}
           </button>
           <button
             onClick={() => setActiveTab('ev')}
@@ -38,7 +39,7 @@ export default function App() {
             }`}
           >
             <Zap className="w-4 h-4" />
-            Conector EV
+            {t('tabs.ev')}
           </button>
         </div>
       </div>

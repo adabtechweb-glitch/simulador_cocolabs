@@ -17,6 +17,7 @@ import {
 import { simulateQuotation, createQuotationFromSimulator, type EVSimulateResponse } from "@/app/lib/evApi";
 import { LiveQuoteCardShell } from "./LiveQuoteCardShell";
 import { useVisibleFrame, isPhoneViewport } from "@/app/hooks/useVisibleFrame";
+import { localizeHref, t } from "@/i18n";
 
 type LocationMode = "idle" | "detecting" | "detected" | "manual";
 
@@ -84,7 +85,7 @@ function AdabTechLogo({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 742.55 148.55"
       className={className}
-      aria-label="Adab.Tech"
+      aria-label={t("common.brandAria")}
     >
       {/* Adab — orange */}
       <path fill="#f5992b" d="M43.43,89.31h37.88l-19.02-56.35-18.85,56.35ZM92.71,123.1l-8.02-23.75h-44.62l-7.95,23.75h-11.21L54.3,23.34h16.23l33.39,99.75h-11.21Z"/>
@@ -154,7 +155,7 @@ export function EVConnectorSimulator() {
         setError(
           err instanceof Error
             ? err.message
-            : "No pudimos calcular el precio. Intenta de nuevo."
+            : t("ev.simulateFallback")
         );
       } finally {
         if (!controller.signal.aborted) {
@@ -192,12 +193,12 @@ export function EVConnectorSimulator() {
           setLocationMode("detected");
         } catch {
           setLocationMode("manual");
-          setLocationError("La detección de ubicación falló, por favor ingrésala manualmente.");
+          setLocationError(t("ev.locationFailed"));
         }
       },
       () => {
         setLocationMode("manual");
-        setLocationError("La detección de ubicación falló, por favor ingrésala manualmente.");
+        setLocationError(t("ev.locationFailed"));
       },
       { timeout: 10000 }
     );
@@ -225,7 +226,7 @@ export function EVConnectorSimulator() {
       setSubmitError(
         err instanceof Error
           ? err.message
-          : "No pudimos enviar tu solicitud. Intenta de nuevo."
+          : t("ev.submitFallback")
       );
     } finally {
       setIsSubmitting(false);
@@ -308,7 +309,7 @@ export function EVConnectorSimulator() {
           <div className="flex items-center gap-2 bg-[#1AB8D7]/15 border border-[#1AB8D7]/30 rounded-full px-4 py-1.5">
             <BatteryCharging className="w-4 h-4 text-[#1AB8D7]" />
             <span className="text-[#1AB8D7] text-xs font-bold tracking-widest uppercase">
-              Simulador EV
+              {t("ev.badge")}
             </span>
           </div>
         </div>
@@ -337,7 +338,7 @@ export function EVConnectorSimulator() {
             <div className="inline-flex items-center gap-2.5 bg-[#1AB8D7]/10 border border-[#1AB8D7]/25 rounded-full px-5 py-2">
               <span className="w-2 h-2 rounded-full bg-[#1AB8D7] animate-pulse" />
               <span className="text-[#1AB8D7] text-xs font-bold tracking-widest uppercase">
-                Solución para movilidad eléctrica
+                {t("ev.kicker")}
               </span>
             </div>
           </div>
@@ -345,11 +346,11 @@ export function EVConnectorSimulator() {
           {/* Main headline */}
           <div className="text-center mb-3 md:mb-5">
             <h1 className="text-white text-3xl md:text-5xl font-extrabold leading-[1.15] tracking-tight mb-2 md:mb-4">
-              Carga tu vehículo en casa,<br />
-              <span className="text-[#1AB8D7]">con total comodidad</span>
+              {t("ev.hero.line1")}<br />
+              <span className="text-[#1AB8D7]">{t("ev.hero.line2")}</span>
             </h1>
             <p className="text-white/55 text-base md:text-xl max-w-xl mx-auto leading-relaxed font-light">
-              Sin esperas, sin desplazamientos y con la tranquilidad de iniciar cada día con energía completa.
+              {t("ev.hero.subtitle")}
             </p>
           </div>
 
@@ -364,26 +365,29 @@ export function EVConnectorSimulator() {
           <div className="hidden md:grid grid-cols-3 gap-4 mb-10">
             {[
               {
+                key: "smart",
                 icon: Brain,
-                title: "Carga inteligente",
-                desc: "Administra el proceso de carga según tu rutina diaria.",
+                title: t("ev.value.smart.title"),
+                desc: t("ev.value.smart.desc"),
                 accent: "cyan",
               },
               {
+                key: "comfort",
                 icon: Home,
-                title: "Comodidad total",
-                desc: "Olvídate de depender de puntos externos.",
+                title: t("ev.value.comfort.title"),
+                desc: t("ev.value.comfort.desc"),
                 accent: "cyan",
               },
               {
+                key: "savings",
                 icon: TrendingDown,
-                title: "Ahorro y eficiencia",
-                desc: "Optimiza el consumo energético y reduce tus costos de movilidad.",
+                title: t("ev.value.savings.title"),
+                desc: t("ev.value.savings.desc"),
                 accent: "orange",
               },
-            ].map(({ icon: Icon, title, desc, accent }) => (
+            ].map(({ key, icon: Icon, title, desc, accent }) => (
               <div
-                key={title}
+                key={key}
                 className={`flex gap-4 bg-white/4 border rounded-2xl px-5 py-5 transition-all group ${
                   accent === "orange"
                     ? "border-[#F49A2B]/12 hover:bg-white/7 hover:border-[#F49A2B]/25"
@@ -411,14 +415,14 @@ export function EVConnectorSimulator() {
           {/* Scroll cue */}
           <div className="flex flex-col items-center gap-2">
             <span className="text-[#1AB8D7]/70 text-xs font-bold tracking-widest uppercase animate-pulse">
-              Calcula tu instalación
+              {t("ev.scrollCue")}
             </span>
             <button
               onClick={() =>
                 document.querySelector('input[type="number"]')?.scrollIntoView({ behavior: "smooth", block: "center" })
               }
               className="flex flex-col items-center gap-1 animate-bounce cursor-pointer focus:outline-none"
-              aria-label="Ir al simulador"
+              aria-label={t("common.goToSimulator")}
             >
               <div className="w-px h-5 bg-gradient-to-b from-transparent to-[#1AB8D7]/60" />
               <svg width="14" height="8" viewBox="0 0 14 8" fill="none" className="text-[#1AB8D7]/70">
@@ -442,17 +446,17 @@ export function EVConnectorSimulator() {
                     <Ruler className="w-4 h-4 text-[#1AB8D7]" />
                   </div>
                   <h2 className="text-white text-lg font-extrabold leading-snug">
-                    ¿Cuántos metros necesita la instalación?
+                    {t("ev.question")}
                   </h2>
                 </div>
                 <p className="text-slate-400 text-sm mb-5 pl-13 leading-relaxed">
-                  Es la distancia desde el tablero eléctrico hasta donde desea ubicar el cargador de su vehículo.
+                  {t("ev.questionHelp")}
                 </p>
 
                 <div className="flex items-center justify-center gap-4 mb-5">
                   <button
                     onClick={handleDecrement}
-                    aria-label="Reducir un metro"
+                    aria-label={t("ev.aria.decrease")}
                     className="w-13 h-13 rounded-xl border-2 border-[#1AB8D7] text-[#1AB8D7] flex items-center justify-center hover:bg-[#1AB8D7]/10 active:scale-95 transition-all text-2xl font-light select-none"
                   >
                     −
@@ -468,11 +472,11 @@ export function EVConnectorSimulator() {
                       step="1"
                       className="w-32 h-20 text-center text-4xl font-extrabold text-white border-2 border-white/10 rounded-xl focus:border-[#1AB8D7] focus:outline-none focus:ring-4 focus:ring-[#1AB8D7]/20 transition-all bg-black/40 placeholder:text-white/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
-                    <span className="text-slate-400 text-xs font-semibold tracking-wide">metros lineales</span>
+                    <span className="text-slate-400 text-xs font-semibold tracking-wide">{t("ev.linearMeters")}</span>
                   </div>
                   <button
                     onClick={handleIncrement}
-                    aria-label="Agregar un metro"
+                    aria-label={t("ev.aria.increase")}
                     className="w-13 h-13 rounded-xl bg-[#1AB8D7] text-white flex items-center justify-center hover:bg-[#139db8] active:scale-95 transition-all text-2xl font-light select-none shadow-lg shadow-[#1AB8D7]/30"
                   >
                     +
@@ -494,7 +498,7 @@ export function EVConnectorSimulator() {
                           }`}
                         >
                           <span className={`text-[13px] font-bold ${active ? "text-[#1AB8D7]" : "text-white"}`}>
-                            {m} m
+                            {t("ev.presetMeters", { count: m })}
                           </span>
                         </button>
                       );
@@ -516,14 +520,14 @@ export function EVConnectorSimulator() {
                       <div className="flex items-center justify-center gap-2 mb-4">
                         <span className="w-2 h-2 rounded-full bg-[#1AB8D7] animate-pulse shrink-0" />
                         <span className="text-[#1AB8D7] text-xs font-bold uppercase tracking-widest text-balance">
-                          Cotización en vivo · Adab.Tech EV
+                          {t("ev.liveQuote")}
                         </span>
                       </div>
-                      <p className="text-white/50 text-sm mb-1">Precio estimado de instalación</p>
+                      <p className="text-white/50 text-sm mb-1">{t("ev.estimatedPrice")}</p>
 
                       {error ? (
                         <div className="mb-6">
-                          <p className="text-white text-lg font-bold mb-2">No pudimos calcular el precio</p>
+                          <p className="text-white text-lg font-bold mb-2">{t("ev.priceFailedTitle")}</p>
                           <p className="text-white/50 text-sm leading-relaxed">{error}</p>
                         </div>
                       ) : (
@@ -537,8 +541,8 @@ export function EVConnectorSimulator() {
                             {hasQuote ? formatCOP(quote.total_price) : "—"}
                           </div>
                           <p className="text-white/40 text-xs mb-6">
-                            {metrosNum} metro{metrosNum !== 1 ? "s" : ""} · IVA incluido
-                            {isLoading ? " · Calculando…" : ""}
+                            {t(metrosNum !== 1 ? "ev.quoteMetaPlural" : "ev.quoteMetaSingular", { count: metrosNum })}
+                            {isLoading ? t("ev.calculatingSuffix") : ""}
                           </p>
                         </>
                       )}
@@ -549,9 +553,9 @@ export function EVConnectorSimulator() {
                         className="w-full py-4 rounded-xl bg-[#1AB8D7] text-white font-extrabold text-base flex items-center justify-center gap-2 hover:bg-[#139db8] active:scale-[0.98] transition-all shadow-lg shadow-[#1AB8D7]/25 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#1AB8D7] disabled:active:scale-100"
                       >
                         <ArrowRight className="w-5 h-5" />
-                        Solicitar mi cotización
+                        {t("common.requestMyQuote")}
                       </button>
-                      <p className="text-white/30 text-xs mt-3">La cotización te llega al instante</p>
+                      <p className="text-white/30 text-xs mt-3">{t("common.quoteArrivesInstantly")}</p>
                   </LiveQuoteCardShell>
                 </div>
               ) : (
@@ -560,7 +564,7 @@ export function EVConnectorSimulator() {
                     <Zap className="w-8 h-8 text-white/40" strokeWidth={1.5} />
                   </div>
                   <p className="text-white/40 text-sm font-medium leading-relaxed">
-                    Ingresa los metros o selecciona el tipo de parqueadero para ver tu estimado al instante
+                    {t("ev.emptyHint")}
                   </p>
                 </div>
               )}
@@ -571,7 +575,7 @@ export function EVConnectorSimulator() {
 
         {/* footer note */}
         <p className="text-center text-slate-400 text-xs mt-4 leading-relaxed max-w-sm mx-auto">
-          Los precios son estimativos. Un técnico de AdabTech confirmará el valor exacto previa visita de diagnóstico.
+          {t("ev.disclaimer")}
         </p>
       </div>
 
@@ -608,9 +612,9 @@ export function EVConnectorSimulator() {
             <div ref={headerRef} className="bg-[#0C2638] px-6 py-5 flex items-center justify-between shrink-0">
               <div>
                 <p className="text-[#1AB8D7] text-xs font-bold uppercase tracking-widest mb-0.5">
-                  Adab.Tech EV
+                  {t("ev.brand")}
                 </p>
-                <h3 className="text-white text-lg font-extrabold">Solicitar cotización</h3>
+                <h3 className="text-white text-lg font-extrabold">{t("common.requestQuote")}</h3>
               </div>
               <button
                 onClick={handleModalClose}
@@ -632,15 +636,15 @@ export function EVConnectorSimulator() {
                 <div className="w-16 h-16 rounded-full bg-[#1AB8D7]/10 flex items-center justify-center mx-auto mb-4">
                   <CheckCircle2 className="w-8 h-8 text-[#1AB8D7]" />
                 </div>
-                <h4 className="text-[#0C2638] text-xl font-extrabold mb-2">¡Listo!</h4>
+                <h4 className="text-[#0C2638] text-xl font-extrabold mb-2">{t("ev.successTitle")}</h4>
                 <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Recibimos tu solicitud. Te contactaremos muy pronto para confirmar los detalles de tu instalación.
+                  {t("ev.successMessage")}
                 </p>
                 <button
                   onClick={handleModalClose}
                   className="px-8 py-3 rounded-xl bg-[#0C2638] text-white font-bold text-sm hover:bg-[#0a1f2f] transition-colors"
                 >
-                  Cerrar
+                  {t("common.close")}
                 </button>
               </div>
             ) : (
@@ -649,7 +653,7 @@ export function EVConnectorSimulator() {
 
                 {/* Chip precio */}
                 <div className="flex items-center justify-between bg-[#0C2638]/5 border border-[#0C2638]/10 rounded-xl px-4 py-3">
-                  <span className="text-[#0C2638]/55 text-sm">{metrosNum} m · estimado</span>
+                  <span className="text-[#0C2638]/55 text-sm">{t("ev.estimateChip", { count: metrosNum })}</span>
                   <span className="text-[#0C2638] font-extrabold text-sm">
                     {hasQuote ? formatCOP(quote.total_price) : "—"}
                   </span>
@@ -658,12 +662,12 @@ export function EVConnectorSimulator() {
                 {/* Campo 1: Nombre */}
                 <div>
                   <label className="block text-[#0C2638] text-sm font-bold mb-2">
-                    Nombre completo
+                    {t("common.fullName")}
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej: Carlos Rodríguez"
+                    placeholder={t("common.namePlaceholder")}
                     value={nombre}
                     onChange={(e) => setNombre(e.target.value)}
                     className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 text-[#0C2638] text-base focus:border-[#1AB8D7] focus:outline-none focus:ring-4 focus:ring-[#1AB8D7]/15 transition-all bg-slate-50 placeholder:text-slate-400"
@@ -673,7 +677,7 @@ export function EVConnectorSimulator() {
                 {/* Campo 2: Ubicación */}
                 <div>
                   <label className="block text-[#0C2638] text-sm font-bold mb-2">
-                    Ubicación del lugar de instalación
+                    {t("common.installLocation")}
                   </label>
 
                   {locationMode === "idle" && (
@@ -684,14 +688,14 @@ export function EVConnectorSimulator() {
                         className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-[#1AB8D7]/40 bg-[#1AB8D7]/10 text-[#0C2638] text-sm font-bold hover:bg-[#1AB8D7]/15 active:scale-[0.98] transition-all"
                       >
                         <MapPin className="w-4 h-4 text-[#1AB8D7]" />
-                        Detectar ubicación
+                        {t("ev.detectLocation")}
                       </button>
                       <button
                         type="button"
                         onClick={() => setLocationMode("manual")}
                         className="text-center text-slate-400 text-xs font-medium hover:text-[#1AB8D7] transition-colors"
                       >
-                        Ingresar manualmente
+                        {t("common.enterManually")}
                       </button>
                     </div>
                   )}
@@ -699,7 +703,7 @@ export function EVConnectorSimulator() {
                   {locationMode === "detecting" && (
                     <div className="w-full flex items-center gap-3 px-4 py-4 rounded-xl border-2 border-slate-200 bg-slate-50">
                       <Loader2 className="w-4 h-4 text-[#1AB8D7] animate-spin flex-shrink-0" />
-                      <span className="text-slate-500 text-sm">Detectando ubicación…</span>
+                      <span className="text-slate-500 text-sm">{t("common.detectingLocation")}</span>
                     </div>
                   )}
 
@@ -709,14 +713,14 @@ export function EVConnectorSimulator() {
                         <div className="flex items-center gap-1.5">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                           <span className="text-emerald-600 text-xs font-semibold">
-                            Ubicación detectada · puedes editarla
+                            {t("common.locationDetectedEditable")}
                           </span>
                         </div>
                       )}
                       <input
                         type="text"
                         required
-                        placeholder="Ej: Bogotá, Distrito Capital"
+                        placeholder={t("ev.locationPlaceholder")}
                         value={ubicacion}
                         onChange={(e) => setUbicacion(e.target.value)}
                         className={`w-full px-4 py-4 rounded-xl border-2 text-[#0C2638] text-base focus:border-[#1AB8D7] focus:outline-none focus:ring-4 focus:ring-[#1AB8D7]/15 transition-all bg-slate-50 placeholder:text-slate-400 ${
@@ -729,7 +733,7 @@ export function EVConnectorSimulator() {
                           onClick={handleDetectLocation}
                           className="text-center text-[#1AB8D7] text-xs font-medium hover:underline"
                         >
-                          Intentar detectar automáticamente
+                          {t("ev.tryDetect")}
                         </button>
                       )}
                     </div>
@@ -743,7 +747,7 @@ export function EVConnectorSimulator() {
                 {/* Campo 3: Toggle WhatsApp / Correo */}
                 <div>
                   <label className="block text-[#0C2638] text-sm font-bold mb-2">
-                    ¿Cómo prefiere que lo contactemos?
+                    {t("common.howToContact")}
                   </label>
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <button
@@ -756,7 +760,7 @@ export function EVConnectorSimulator() {
                       }`}
                     >
                       <Phone className="w-4 h-4" />
-                      WhatsApp
+                      {t("common.whatsapp")}
                     </button>
                     <button
                       type="button"
@@ -768,7 +772,7 @@ export function EVConnectorSimulator() {
                       }`}
                     >
                       <Mail className="w-4 h-4" />
-                      Correo
+                      {t("common.email")}
                     </button>
                   </div>
 
@@ -779,8 +783,8 @@ export function EVConnectorSimulator() {
                     required
                     placeholder={
                       contactType === "whatsapp"
-                        ? "Ej: 300 123 4567"
-                        : "nombre@correo.com"
+                        ? t("common.phonePlaceholder")
+                        : t("common.emailPlaceholder")
                     }
                     value={contactValue}
                     onChange={(e) => setContactValue(e.target.value)}
@@ -800,24 +804,24 @@ export function EVConnectorSimulator() {
                   className="w-full py-4 rounded-xl bg-[#0C2638] text-white font-extrabold text-base flex items-center justify-center gap-2 hover:bg-[#0a1f2f] active:scale-[0.98] transition-all shadow-lg shadow-[#0C2638]/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[#0C2638] disabled:active:scale-100"
                 >
                   <Zap className="w-4 h-4 text-[#1AB8D7]" />
-                  {isSubmitting ? "Enviando…" : "Enviar"}
+                  {isSubmitting ? t("ev.submitting") : t("ev.submit")}
                 </button>
 
                 <div className="text-center space-y-2">
                     <p className="text-slate-400 text-xs text-center">
                       <Lock className="w-3.5 h-3.5 inline-block align-text-bottom mr-1.5 shrink-0" strokeWidth={2} />
-                      Al enviar este formulario, aceptas nuestra{' '}
+                      {t("common.privacyLead")}{' '}
                       <a
-                        href={`${window.location.origin}/politica-de-privacidad`}
+                        href={localizeHref(t("links.privacyPath"))}
                         target="__blank"
                         rel="noopener noreferrer"
                         className="text-[#F49A2B] font-semibold hover:underline"
                       >
-                        Política de Privacidad
+                        {t("common.privacyPolicy")}
                       </a>
                     </p>
                     <p className="text-slate-400 text-xs inline-flex items-center justify-center gap-1.5">
-                      Tus datos están protegidos.
+                      {t("common.dataProtected")}
                     </p>
                   </div>
               </form>

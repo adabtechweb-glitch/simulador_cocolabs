@@ -1,12 +1,13 @@
 import Swal, { SweetAlertIcon } from 'sweetalert2';
 import '../../styles/SolarAlert.css';
+import { t } from '@/i18n';
 
 export const showSolarAlert = async (icon: SweetAlertIcon, title: string, message: string) => {
   await Swal.fire({
     icon,
     title,
     text: message,
-    confirmButtonText: 'Aceptar',
+    confirmButtonText: t('common.accept'),
     buttonsStyling: false,
     iconColor: '#f5a63f',
     // --- ESTO RECUPERA EL COLOR OSCURO ---

@@ -19,6 +19,7 @@ import consumptionImageIcon from '../assets/consumption_image_icon.png';
 import { showSolarAlert } from './alert-custom';
 import { LiveQuoteCardShell } from './LiveQuoteCardShell';
 import { useVisibleFrame, isPhoneViewport } from '@/app/hooks/useVisibleFrame';
+import { localizeHref, t } from '@/i18n';
 
 function AdabTechLogo({ className }: { className?: string }) {
   return (
@@ -26,7 +27,7 @@ function AdabTechLogo({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 742.55 148.55"
       className={className}
-      aria-label="Adab.Tech"
+      aria-label={t('common.brandAria')}
     >
       <path fill="#f5992b" d="M43.43,89.31h37.88l-19.02-56.35-18.85,56.35ZM92.71,123.1l-8.02-23.75h-44.62l-7.95,23.75h-11.21L54.3,23.34h16.23l33.39,99.75h-11.21Z"/>
       <path fill="#f5992b" d="M149.6,56.36c-5.34,0-9.82,1.34-13.31,3.98-3.48,2.62-6.09,6.22-7.76,10.68-1.65,4.4-2.49,9.38-2.49,14.82s.85,10.51,2.52,14.93c1.7,4.48,4.29,8.08,7.72,10.71,3.45,2.64,7.82,3.98,12.97,3.98s9.71-1.3,13.14-3.88c3.41-2.56,5.96-6.13,7.59-10.61,1.6-4.42,2.41-9.51,2.41-15.13s-.82-10.77-2.45-15.17c-1.65-4.46-4.18-8-7.52-10.51-3.36-2.53-7.66-3.8-12.82-3.8M147.69,125.21c-6.88,0-12.86-1.73-17.76-5.13-4.92-3.42-8.77-8.15-11.44-14.06-2.69-5.94-4.05-12.73-4.05-20.18s1.36-14.23,4.05-20.15c2.67-5.89,6.52-10.59,11.43-13.99,4.9-3.38,10.85-5.1,17.69-5.1s12.89,1.71,17.6,5.09c1.48,1.06,2.91,2.31,4.25,3.72l1.5,1.57V23.34h10.88v99.76h-9.48v-10.22l-1.53,1.87c-1.68,2.04-3.57,3.82-5.62,5.31-4.71,3.42-10.61,5.16-17.53,5.16"/>
@@ -43,7 +44,6 @@ function AdabTechLogo({ className }: { className?: string }) {
 const SOLAR_API_BASE = 'https://simulador-adabtech-1faf32f78070.herokuapp.com/api';
 const SOLAR_SIMULATOR_ID = 'cc7110e6-0e5d-443e-858d-b4a77db9246b';
 const SOLAR_SIMULATOR_KEY = 'DtivwlVNvffJCBU7qQZUQ8Rn8gItHptS';
-const QUOTE_REDIRECT_URL = 'https://adabtech.com/forms/quote';
 
 type LocationMode = 'idle' | 'detecting' | 'detected' | 'manual';
 
@@ -241,9 +241,9 @@ export function SolarSimulator() {
 
   const getConsumptionLabel = () => {
     const level = getConsumptionLevel();
-    if (level === 'bajo') return 'Residencial - Consumo bajo';
-    if (level === 'medio') return 'Residencial/Comercial - Consumo medio';
-    return 'Comercial/Industrial - Consumo alto';
+    if (level === 'bajo') return t('solar.consumption.low');
+    if (level === 'medio') return t('solar.consumption.mid');
+    return t('solar.consumption.high');
   };
 
   // --- HANDLERS DEL FORMULARIO ---
@@ -368,14 +368,14 @@ export function SolarSimulator() {
     // --- NUEVA VALIDACIÓN DE CONSUMO MÍNIMO ---
     if (consumption < 300) {
       setShowQuoteForm(false);
-      showAlert('error', 'Consumo insuficiente', 'El consumo mínimo para realizar la simulación es de 300 kWh/mes.');
+      showAlert('error', t('solar.alert.lowConsumption.title'), t('solar.alert.lowConsumption.message'));
       return;
     }
 
     // Caso 1: Nombre vacío o muy corto
     if (formData.name.trim().length < 3) {
       setShowQuoteForm(false);
-      showAlert('error', 'Nombre incompleto', 'Por favor, ingresa tu nombre completo.');
+      showAlert('error', t('solar.alert.incompleteName.title'), t('solar.alert.incompleteName.message'));
       return; // Detiene la ejecución aquí
     }
 
@@ -395,13 +395,13 @@ export function SolarSimulator() {
 
       if (!emailRegex.test(contactValue) || isReservedDomain || isReservedTLD) {
 
-        let errorMsg = 'La dirección de correo electrónico no es correcta.';
+        let errorMsg = t('solar.alert.invalidEmail.message');
         if (isReservedDomain || isReservedTLD) {
-          errorMsg = 'Parece que estás usando un dominio de prueba. Por seguridad, requerimos una dirección de correo activa.';
+          errorMsg = t('solar.alert.reservedEmail.message');
         }
 
         setShowQuoteForm(false);
-        showAlert('error', 'Correo inválido', errorMsg);
+        showAlert('error', t('solar.alert.invalidEmail.title'), errorMsg);
         return;
       }
     }
@@ -416,10 +416,10 @@ export function SolarSimulator() {
         setShowQuoteForm(false);
         showAlert(
           'error',
-          'Teléfono inválido',
+          t('solar.alert.invalidPhone.title'),
           isAllSameDigits
-            ? 'El número no puede contener solo dígitos repetidos.'
-            : 'El número debe tener entre 7 y 15 dígitos numéricos.'
+            ? t('solar.alert.invalidPhone.repeated')
+            : t('solar.alert.invalidPhone.length')
         );
         return;
       }
@@ -431,7 +431,7 @@ export function SolarSimulator() {
 
     if (!locationIsValid) {
       setShowQuoteForm(false);
-      showAlert('error', 'Ubicación incompleta', 'Ingresa una dirección válida para ubicar la instalación.');
+      showAlert('error', t('solar.alert.incompleteLocation.title'), t('solar.alert.incompleteLocation.message'));
       return;
     }
 
@@ -489,10 +489,10 @@ export function SolarSimulator() {
       if (googleResult?.status === 'success') {
         setShowQuoteForm(false);
         const successMsg = isEmail
-          ? 'Tu propuesta llegará pronto a tu correo. ¡No olvides revisar tu bandeja!'
-          : '¡Perfecto! Te enviaremos un mensaje por WhatsApp en breve.';
+          ? t('solar.alert.success.email')
+          : t('solar.alert.success.whatsapp');
 
-        showAlert('success', '¡Recibido!', successMsg);
+        showAlert('success', t('solar.alert.success.title'), successMsg);
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         setFormData(emptyQuoteForm());
@@ -502,15 +502,15 @@ export function SolarSimulator() {
         setInputValue('300');
 
         if (window.top) {
-          window.top.location.href = QUOTE_REDIRECT_URL;
+          window.top.location.href = t('links.quoteRedirect');
         } else {
-          window.location.href = QUOTE_REDIRECT_URL;
+          window.location.href = t('links.quoteRedirect');
         }
       } else {
-        showAlert('error', 'Error de servidor', 'No pudimos procesar los datos. Intenta más tarde.');
+        showAlert('error', t('solar.alert.server.title'), t('solar.alert.server.message'));
       }
     } catch {
-      showAlert('error', 'Error de conexión', 'No hubo respuesta del servidor.');
+      showAlert('error', t('solar.alert.connection.title'), t('solar.alert.connection.message'));
     } finally {
       setIsSubmitting(false);
     }
@@ -625,7 +625,7 @@ export function SolarSimulator() {
           <div className="flex items-center gap-2 bg-[#F49A2B]/15 border border-[#F49A2B]/30 rounded-full px-4 py-1.5">
             <Sun className="w-4 h-4 text-[#F49A2B]" />
             <span className="text-[#F49A2B] text-xs font-bold tracking-widest uppercase">
-              Simulador Solar
+              {t('solar.badge')}
             </span>
           </div>
         </div>
@@ -677,18 +677,18 @@ export function SolarSimulator() {
             <div className="inline-flex items-center gap-2.5 bg-[#F49A2B]/10 border border-[#F49A2B]/25 rounded-full px-5 py-2">
               <span className="w-2 h-2 rounded-full bg-[#F49A2B] animate-pulse" />
               <span className="text-[#F49A2B] text-xs font-bold tracking-widest uppercase">
-                Solución de energía solar
+                {t('solar.kicker')}
               </span>
             </div>
           </div>
 
           <div className="text-center mb-3 md:mb-5">
             <h1 className="text-white text-3xl md:text-5xl font-extrabold leading-[1.15] tracking-tight mb-2 md:mb-4">
-              Genera tu propia energía y<br />
-              <span className="text-[#F49A2B]">ahorra desde el primer mes</span>
+              {t('solar.hero.line1')}<br />
+              <span className="text-[#F49A2B]">{t('solar.hero.line2')}</span>
             </h1>
             <p className="text-white/55 text-base md:text-xl max-w-xl mx-auto leading-relaxed font-light">
-              Calcula cuánto puedes ahorrar con energía solar y obtén en tiempo real la inversión y el sistema ideal para tu hogar o empresa.
+              {t('solar.hero.subtitle')}
             </p>
           </div>
 
@@ -701,26 +701,29 @@ export function SolarSimulator() {
           <div className="hidden md:grid grid-cols-3 gap-4 mb-10">
             {[
               {
+                key: 'save',
                 icon: TrendingDown,
-                title: 'Ahorro desde el primer mes',
-                desc: 'Reduce tu factura de servicios y protégete de las alzas de tarifas.',
+                title: t('solar.value.save.title'),
+                desc: t('solar.value.save.desc'),
                 accent: 'orange',
               },
               {
+                key: 'clean',
                 icon: SunMedium,
-                title: 'Energía limpia y propia',
-                desc: 'Genera electricidad renovable en tu techo y disminuye tu huella de carbono.',
+                title: t('solar.value.clean.title'),
+                desc: t('solar.value.clean.desc'),
                 accent: 'orange',
               },
               {
+                key: 'support',
                 icon: Leaf,
-                title: 'Acompañamiento continuo',
-                desc: 'La instalación es solo el comienzo. Mantenemos tu sistema produciendo al máximo.',
+                title: t('solar.value.support.title'),
+                desc: t('solar.value.support.desc'),
                 accent: 'cyan',
               },
-            ].map(({ icon: Icon, title, desc, accent }) => (
+            ].map(({ key, icon: Icon, title, desc, accent }) => (
               <div
-                key={title}
+                key={key}
                 className={`flex gap-4 bg-white/4 border rounded-2xl px-5 py-5 transition-all group ${
                   accent === 'orange'
                     ? 'border-[#F49A2B]/12 hover:bg-white/7 hover:border-[#F49A2B]/25'
@@ -749,7 +752,7 @@ export function SolarSimulator() {
 
           <div className="flex flex-col items-center gap-2">
             <span className="text-[#F49A2B]/70 text-xs font-bold tracking-widest uppercase animate-pulse">
-              Calcula tu sistema solar
+              {t('solar.scrollCue')}
             </span>
             <button
               type="button"
@@ -757,7 +760,7 @@ export function SolarSimulator() {
                 document.querySelector('input[type="number"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
               }
               className="flex flex-col items-center gap-1 animate-bounce cursor-pointer focus:outline-none"
-              aria-label="Ir al simulador"
+              aria-label={t('common.goToSimulator')}
             >
               <div className="w-px h-5 bg-gradient-to-b from-transparent to-[#F49A2B]/60" />
               <svg width="14" height="8" viewBox="0 0 14 8" fill="none" className="text-[#F49A2B]/70">
@@ -780,18 +783,18 @@ export function SolarSimulator() {
                     <Sun className="w-4 h-4 text-[#F49A2B]" />
                   </div>
                   <h2 className="text-white text-lg font-extrabold leading-snug">
-                    ¿Cuántos kWh consumes al mes?
+                    {t('solar.question')}
                   </h2>
                 </div>
                 <div className="flex items-start gap-1.5 mb-5 pl-13">
                   <p className="text-slate-400 text-sm leading-relaxed">
-                    Es el consumo en kWh que aparece en tu factura de energía. Si no lo tienes a la mano, elige un valor aproximado.
+                    {t('solar.questionHelp')}
                   </p>
                   <button
                     type="button"
                     onClick={() => setShowModal(true)}
                     className="flex-shrink-0 p-1 rounded-full bg-[#F49A2B]/10 border border-[#F49A2B]/30 text-[#F49A2B] hover:bg-[#F49A2B]/20 transition-colors mt-0.5"
-                    aria-label="Ver ejemplo de factura"
+                    aria-label={t('solar.aria.invoiceExample')}
                   >
                     <Info className="w-3.5 h-3.5" />
                   </button>
@@ -801,7 +804,7 @@ export function SolarSimulator() {
                   <button
                     type="button"
                     onClick={handleDecrement}
-                    aria-label="Disminuir consumo"
+                    aria-label={t('solar.aria.decrease')}
                     className="w-13 h-13 rounded-xl border-2 border-[#F49A2B] text-[#F49A2B] flex items-center justify-center hover:bg-[#F49A2B]/10 active:scale-95 transition-all text-2xl font-light select-none"
                   >
                     −
@@ -817,12 +820,12 @@ export function SolarSimulator() {
                       onBlur={handleInputBlur}
                       className="w-32 h-20 text-center text-4xl font-extrabold text-white border-2 border-white/10 rounded-xl focus:border-[#F49A2B] focus:outline-none focus:ring-4 focus:ring-[#F49A2B]/20 transition-all bg-black/40 placeholder:text-white/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
-                    <span className="text-slate-400 text-xs font-semibold tracking-wide">kWh / mes</span>
+                    <span className="text-slate-400 text-xs font-semibold tracking-wide">{t('solar.unitPerMonth')}</span>
                   </div>
                   <button
                     type="button"
                     onClick={handleIncrement}
-                    aria-label="Aumentar consumo"
+                    aria-label={t('solar.aria.increase')}
                     className="w-13 h-13 rounded-xl bg-[#F49A2B] text-white flex items-center justify-center hover:bg-[#d9841f] active:scale-95 transition-all text-2xl font-light select-none shadow-lg shadow-[#F49A2B]/30"
                   >
                     +
@@ -831,9 +834,9 @@ export function SolarSimulator() {
 
                 <div className="mb-2 px-1">
                   <div className="flex justify-between mb-1.5 px-0.5">
-                    <span className="text-white/50 text-[10px] font-semibold">Bajo</span>
-                    <span className="text-white/50 text-[10px] font-semibold">Medio</span>
-                    <span className="text-white/50 text-[10px] font-semibold">Alto</span>
+                    <span className="text-white/50 text-[10px] font-semibold">{t('solar.level.low')}</span>
+                    <span className="text-white/50 text-[10px] font-semibold">{t('solar.level.mid')}</span>
+                    <span className="text-white/50 text-[10px] font-semibold">{t('solar.level.high')}</span>
                   </div>
                   <input
                     type="range"
@@ -848,8 +851,8 @@ export function SolarSimulator() {
                     }}
                   />
                   <div className="flex justify-between mt-1.5 px-0.5">
-                    <span className="text-white/40 text-[10px] font-semibold">300 kWh</span>
-                    <span className="text-white/40 text-[10px] font-semibold">30 000 kWh</span>
+                    <span className="text-white/40 text-[10px] font-semibold">{t('solar.scale.min')}</span>
+                    <span className="text-white/40 text-[10px] font-semibold">{t('solar.scale.max')}</span>
                   </div>
                 </div>
 
@@ -868,10 +871,10 @@ export function SolarSimulator() {
                     <div className="flex items-center justify-center gap-2 mb-4">
                       <span className="w-2 h-2 rounded-full bg-[#F49A2B] animate-pulse shrink-0" />
                       <span className="text-[#F49A2B] text-xs font-bold uppercase tracking-widest text-balance">
-                        Cotización en vivo · Adab.Tech Solar
+                        {t('solar.liveQuote')}
                       </span>
                     </div>
-                    <p className="text-white/50 text-sm mb-1">Inversión estimada del sistema</p>
+                    <p className="text-white/50 text-sm mb-1">{t('solar.estimatedInvestment')}</p>
                     <div
                       className="text-white font-extrabold mb-1 tracking-tight"
                       style={{ fontSize: 'clamp(1.5rem, 8vw, 2.25rem)' }}
@@ -879,7 +882,7 @@ export function SolarSimulator() {
                       {formatCurrency(results.precio)}
                     </div>
                     <p className="text-white/40 text-xs mb-4">
-                      {consumption} kWh/mes · IVA incluido
+                      {t('solar.consumptionVat', { consumption })}
                     </p>
 
                     <div className="flex flex-col gap-2 mb-6">
@@ -887,16 +890,16 @@ export function SolarSimulator() {
                         <div className="bg-white/5 rounded-xl p-3">
                           <p className="text-[#F49A2B] text-lg font-extrabold leading-none">{results.paneles}</p>
                           <p className="text-white/50 text-[10px] mt-1">
-                            paneles · {results.potenciaPico} kWp
+                            {t('solar.panelsPeak', { peakPower: results.potenciaPico })}
                           </p>
                         </div>
                         <div className="bg-white/5 rounded-xl p-3">
-                          <p className="text-[#F49A2B] text-lg font-extrabold leading-none">{results.area} m²</p>
-                          <p className="text-white/50 text-[10px] mt-1">área</p>
+                          <p className="text-[#F49A2B] text-lg font-extrabold leading-none">{t('solar.areaValue', { area: results.area })}</p>
+                          <p className="text-white/50 text-[10px] mt-1">{t('solar.area')}</p>
                         </div>
                       </div>
                       <div className="bg-white/5 rounded-xl p-3 flex items-center justify-between">
-                        <p className="text-white/50 text-[10px]">ahorro/mes estimado</p>
+                        <p className="text-white/50 text-[10px]">{t('solar.savingsPerMonth')}</p>
                         <p className="text-[#F49A2B] text-base font-extrabold leading-none">
                           {formatCurrency(results.ahorro)}
                         </p>
@@ -912,9 +915,9 @@ export function SolarSimulator() {
                       className="w-full py-4 rounded-xl bg-[#F49A2B] text-white font-extrabold text-base flex items-center justify-center gap-2 hover:bg-[#d9841f] active:scale-[0.98] transition-all shadow-lg shadow-[#F49A2B]/25"
                     >
                       <ArrowRight className="w-5 h-5" />
-                      Solicitar mi cotización
+                      {t('common.requestMyQuote')}
                     </button>
-                    <p className="text-white/30 text-xs mt-3">La cotización te llega al instante</p>
+                    <p className="text-white/30 text-xs mt-3">{t('common.quoteArrivesInstantly')}</p>
                 </LiveQuoteCardShell>
               </div>
             </div>
@@ -922,7 +925,7 @@ export function SolarSimulator() {
         </div>
 
         <p className="text-center text-slate-400 text-xs mt-4 leading-relaxed max-w-sm mx-auto">
-        Los precios son estimativos. Un especialista en energía solar de AdabTech confirmará el sistema ideal para ti previa reunión de diagnóstico.
+        {t('solar.disclaimer')}
         </p>
       </div>
 
@@ -957,7 +960,7 @@ export function SolarSimulator() {
                   setIsZoomed(false);
                 }}
                 className="absolute -top-12 right-0 p-2.5 rounded-full bg-[#F49A2B]/30 border-2 border-[#F49A2B]/60 text-[#F49A2B] hover:scale-110 transition-all"
-                aria-label="Cerrar"
+                aria-label={t('common.close')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -977,7 +980,7 @@ export function SolarSimulator() {
                 )}
                 <img
                   src={consumptionImageIcon}
-                  alt="Consumo en factura"
+                  alt={t('solar.invoiceAlt')}
                   className="w-full h-auto block transition-transform duration-300"
                   style={{
                     transform: isZoomed ? 'scale(1.8)' : 'scale(1)',
@@ -988,7 +991,7 @@ export function SolarSimulator() {
                 />
               </div>
               <p className="text-center mt-3 text-sm font-medium text-white/70 shrink-0">
-                {isZoomed ? 'Haz clic para reducir' : 'Haz clic en la imagen para ampliar'}
+                {isZoomed ? t('solar.zoomOut') : t('solar.zoomIn')}
               </p>
             </div>
           </div>
@@ -1026,15 +1029,15 @@ export function SolarSimulator() {
               <div className="bg-[#0C2638] px-6 py-5 flex items-center justify-between shrink-0">
                 <div>
                   <p className="text-[#F49A2B] text-xs font-bold uppercase tracking-widest mb-0.5">
-                    Adab.Tech Solar
+                    {t('solar.brand')}
                   </p>
-                  <h3 className="text-white text-lg font-extrabold">Solicitar cotización</h3>
+                  <h3 className="text-white text-lg font-extrabold">{t('common.requestQuote')}</h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowQuoteForm(false)}
                   className="text-white/40 hover:text-white text-2xl leading-none transition-colors w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10"
-                  aria-label="Cerrar"
+                  aria-label={t('common.close')}
                 >
                   ×
                 </button>
@@ -1049,22 +1052,22 @@ export function SolarSimulator() {
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                   <div className="bg-[#F49A2B]/8 border border-[#F49A2B]/20 rounded-xl px-4 py-3 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[#0C2638]/55 text-sm">{consumption} kWh/mes</span>
+                      <span className="text-[#0C2638]/55 text-sm">{t('solar.monthlyConsumption', { consumption })}</span>
                       <span className="text-[#0C2638] font-extrabold text-sm">
                         {formatCurrency(results.precio)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between border-t border-[#F49A2B]/15 pt-1.5">
-                      <span className="text-[#0C2638]/55 text-sm">Paneles estimados</span>
+                      <span className="text-[#0C2638]/55 text-sm">{t('solar.estimatedPanels')}</span>
                       <span className="text-[#0C2638] font-extrabold text-sm">
-                        {results.paneles} paneles
+                        {t('solar.panelCount', { count: results.paneles })}
                       </span>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[#0C2638] text-sm font-bold mb-2">
-                      Nombre completo
+                      {t('common.fullName')}
                     </label>
                     <input
                       type="text"
@@ -1072,14 +1075,14 @@ export function SolarSimulator() {
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Ej: Carlos Rodríguez"
+                      placeholder={t('common.namePlaceholder')}
                       className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 text-[#0C2638] text-base focus:border-[#F49A2B] focus:outline-none focus:ring-4 focus:ring-[#F49A2B]/15 transition-all bg-slate-50 placeholder:text-slate-400"
                     />
                   </div>
 
                   <div>
                     <label className="block text-[#0C2638] text-sm font-bold mb-2">
-                      ¿Cómo prefiere que lo contactemos?
+                      {t('common.howToContact')}
                     </label>
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <button
@@ -1092,7 +1095,7 @@ export function SolarSimulator() {
                         }`}
                       >
                         <Phone className="w-4 h-4" />
-                        WhatsApp
+                        {t('common.whatsapp')}
                       </button>
                       <button
                         type="button"
@@ -1104,7 +1107,7 @@ export function SolarSimulator() {
                         }`}
                       >
                         <Mail className="w-4 h-4" />
-                        Correo
+                        {t('common.email')}
                       </button>
                     </div>
 
@@ -1114,7 +1117,7 @@ export function SolarSimulator() {
                         required
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="nombre@correo.com"
+                        placeholder={t('common.emailPlaceholder')}
                         className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 text-[#0C2638] text-base focus:border-[#F49A2B] focus:outline-none focus:ring-4 focus:ring-[#F49A2B]/15 transition-all bg-slate-50 placeholder:text-slate-400"
                       />
                     ) : (
@@ -1124,7 +1127,7 @@ export function SolarSimulator() {
                         required
                         value={formData.whatsapp}
                         onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                        placeholder="Ej: 300 123 4567"
+                        placeholder={t('common.phonePlaceholder')}
                         className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 text-[#0C2638] text-base focus:border-[#F49A2B] focus:outline-none focus:ring-4 focus:ring-[#F49A2B]/15 transition-all bg-slate-50 placeholder:text-slate-400"
                       />
                     )}
@@ -1132,7 +1135,7 @@ export function SolarSimulator() {
 
                   <div>
                     <label className="block text-[#0C2638] text-sm font-bold mb-2">
-                      Ubicación del lugar de instalación
+                      {t('common.installLocation')}
                     </label>
 
                     {locationMode === 'idle' && (
@@ -1143,14 +1146,14 @@ export function SolarSimulator() {
                           className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-[#F49A2B]/40 bg-[#F49A2B]/10 text-[#0C2638] text-sm font-bold hover:bg-[#F49A2B]/15 active:scale-[0.98] transition-all"
                         >
                           <MapPin className="w-4 h-4 text-[#F49A2B]" />
-                          Detectar mi ubicación
+                          {t('solar.detectMyLocation')}
                         </button>
                         <button
                           type="button"
                           onClick={() => setLocationMode('manual')}
                           className="text-center text-slate-400 text-xs font-medium hover:text-[#F49A2B] transition-colors"
                         >
-                          Ingresar manualmente
+                          {t('common.enterManually')}
                         </button>
                       </div>
                     )}
@@ -1158,7 +1161,7 @@ export function SolarSimulator() {
                     {locationMode === 'detecting' && (
                       <div className="w-full flex items-center gap-3 px-4 py-4 rounded-xl border-2 border-slate-200 bg-slate-50">
                         <Loader2 className="w-4 h-4 text-[#F49A2B] animate-spin flex-shrink-0" />
-                        <span className="text-slate-500 text-sm">Detectando ubicación…</span>
+                        <span className="text-slate-500 text-sm">{t('common.detectingLocation')}</span>
                       </div>
                     )}
 
@@ -1167,7 +1170,7 @@ export function SolarSimulator() {
                         <div className="flex items-center gap-1.5">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                           <span className="text-emerald-600 text-xs font-semibold">
-                            Ubicación detectada · puedes editarla
+                            {t('common.locationDetectedEditable')}
                           </span>
                         </div>
                         <div className="flex gap-2">
@@ -1175,7 +1178,7 @@ export function SolarSimulator() {
                             type="text"
                             value={formatDetectedLocation()}
                             onChange={(e) => onDetectedLocationChange(e.target.value)}
-                            placeholder="Dirección, Ciudad, Departamento"
+                            placeholder={t('solar.addressPlaceholder')}
                             className="flex-1 px-4 py-4 rounded-xl border-2 border-emerald-400 text-[#0C2638] text-base focus:border-[#F49A2B] focus:outline-none focus:ring-4 focus:ring-[#F49A2B]/15 transition-all bg-slate-50 placeholder:text-slate-400"
                           />
                           {coords && (
@@ -1183,7 +1186,7 @@ export function SolarSimulator() {
                               href={`https://www.google.com/maps?q=${coords.lat},${coords.lon}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              title="Ver en Google Maps"
+                              title={t('solar.viewOnMaps')}
                               className="flex items-center justify-center px-3 rounded-xl border-2 border-emerald-400 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all shrink-0"
                             >
                               <MapPin className="w-4 h-4" />
@@ -1205,7 +1208,7 @@ export function SolarSimulator() {
                           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-[#F49A2B]/40 bg-[#F49A2B]/10 text-[#0C2638] text-sm font-bold hover:bg-[#F49A2B]/15 transition-all"
                         >
                           <MapPin className="w-4 h-4 text-[#F49A2B]" />
-                          No estoy en el lugar de instalación
+                          {t('solar.notAtInstallSite')}
                         </button>
                       </div>
                     )}
@@ -1224,7 +1227,7 @@ export function SolarSimulator() {
                             onBlur={(e) => {
                               if (!showMunicipalityList) detectRegion(e.target.value);
                             }}
-                            placeholder="Ciudad o municipio"
+                            placeholder={t('solar.cityPlaceholder')}
                             className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 text-[#0C2638] text-base focus:border-[#F49A2B] focus:outline-none focus:ring-4 focus:ring-[#F49A2B]/15 transition-all bg-slate-50 placeholder:text-slate-400"
                           />
                           {showMunicipalityList && municipalities.length > 0 && (
@@ -1255,7 +1258,7 @@ export function SolarSimulator() {
                         </div>
                         <div className="flex items-center justify-between px-1">
                           <span className="text-slate-400 text-[11px]">
-                            Escribe la ciudad y elige de la lista
+                            {t('solar.cityHint')}
                           </span>
                           <button
                             type="button"
@@ -1263,13 +1266,13 @@ export function SolarSimulator() {
                             className="text-xs flex items-center gap-1 text-[#F49A2B] hover:underline shrink-0"
                           >
                             <MapPin className="w-3 h-3" />
-                            Usar mi ubicación
+                            {t('solar.useMyLocation')}
                           </button>
                         </div>
                         {regionSuggestions.length > 0 && (
                           <div className="bg-[#F49A2B]/8 border border-[#F49A2B]/25 rounded-xl px-3 py-2.5">
                             <p className="text-[#0C2638] text-xs font-semibold mb-2">
-                              Este municipio existe en varias regiones. Selecciona la correcta:
+                              {t('solar.regionAmbiguous')}
                             </p>
                             <div className="flex flex-wrap gap-1.5">
                               {regionSuggestions.map((suggestion) => (
@@ -1304,12 +1307,12 @@ export function SolarSimulator() {
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        Procesando solicitud...
+                        {t('solar.submitting')}
                       </>
                     ) : (
                       <>
                         <Sun className="w-4 h-4 text-[#F49A2B]" />
-                        Enviar solicitud
+                        {t('solar.submit')}
                       </>
                     )}
                   </button>
@@ -1318,19 +1321,19 @@ export function SolarSimulator() {
                     <p className="text-slate-400 text-xs inline-flex items-center justify-center gap-1.5 flex-wrap">
                       <Lock className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
                       <span>
-                        Al enviar este formulario, aceptas nuestra{' '}
+                        {t('common.privacyLead')}{' '}
                         <a
-                          href={`${window.location.origin}/politica-de-privacidad`}
+                          href={localizeHref(t('links.privacyPath'))}
                           target="__blank"
                           rel="noopener noreferrer"
                           className="text-[#F49A2B] font-semibold hover:underline"
                         >
-                          Política de Privacidad
+                          {t('common.privacyPolicy')}
                         </a>
                       </span>
                     </p>
                     <p className="text-slate-400 text-xs inline-flex items-center justify-center gap-1.5">
-                      Tus datos están protegidos.
+                      {t('common.dataProtected')}
                     </p>
                   </div>
                 </form>
